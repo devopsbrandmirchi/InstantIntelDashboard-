@@ -1,0 +1,399 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../lib/supabase';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+
+function getDaysInCurrentMonth() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const days = [];
+  for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+const CHART_COLORS = [
+  'rgb(59, 130, 246)', 'rgb(34, 197, 94)', 'rgb(234, 179, 8)', 'rgb(239, 68, 68)',
+  'rgb(168, 85, 247)', 'rgb(236, 72, 153)', 'rgb(20, 184, 166)', 'rgb(249, 115, 22)'
+];
+
+const Dashboard = () => {
+  const [stats, setStats] = useState({
+    totalClients: 0,
+    activeClients: 0,
+    totalInventory: 0,
+    customersWithInventory: 0,
+    totalRoles: 0,
+    activeUsers: 0
+  });
+  const [error, setError] = useState(null);
+  const [dailyInventoryData, setDailyInventoryData] = useState([]);
+  const [dailySalesData, setDailySalesData] = useState([]);
+  const [dailySalesByCustomerData, setDailySalesByCustomerData] = useState([]);
+  const [clientsMap, setClientsMap] = useState({});
+  const [chartError, setChartError] = useState(null);
+  const [salesChartError, setSalesChartError] = useState(null);
+  const [salesByCustomerChartError, setSalesByCustomerChartError] = useState(null);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  useEffect(() => {
+    loadChartData();
+  }, []);
+
+  useEffect(() => {
+    loadSalesChartData();
+  }, []);
+
+  useEffect(() => {
+    loadSalesByCustomerChartData();
+  }, []);
+
+  const loadChartData = async () => {
+    setChartError(null);
+    try {
+      const [dailyRes, clientsRes] = await Promise.all([
+        supabase.rpc('get_daily_inventory_by_customer'),
+        supabase.from('clients').select('id, full_name')
+      ]);
+      if (clientsRes.data) {
+        setClientsMap(Object.fromEntries((clientsRes.data || []).map((c) => [c.id, c.full_name || `Client #${c.id}`])));
+      }
+      if (dailyRes.error) throw dailyRes.error;
+      setDailyInventoryData(dailyRes.data || []);
+    } catch (err) {
+      console.error('Error loading chart data:', err);
+      setChartError(err?.message || 'Failed to load chart data.');
+      setDailyInventoryData([]);
+    }
+  };
+
+  const loadSalesChartData = async () => {
+    setSalesChartError(null);
+    try {
+      const { data, error } = await supabase.rpc('get_daily_sales_current_month');
+      if (error) throw error;
+      setDailySalesData(data || []);
+    } catch (err) {
+      console.error('Error loading sales chart data:', err);
+      setSalesChartError(err?.message || 'Failed to load sales chart data.');
+      setDailySalesData([]);
+    }
+  };
+
+  const loadSalesByCustomerChartData = async () => {
+    setSalesByCustomerChartError(null);
+    try {
+      const { data, error } = await supabase.rpc('get_daily_sales_by_customer');
+      if (error) throw error;
+      setDailySalesByCustomerData(data || []);
+    } catch (err) {
+      console.error('Error loading sales-by-customer chart data:', err);
+      setSalesByCustomerChartError(err?.message || 'Failed to load sales by customer data.');
+      setDailySalesByCustomerData([]);
+    }
+  };
+
+  const loadDashboardData = async () => {
+    setError(null);
+    try {
+      const [clientsRes, activeClientsRes, inventoryRes, customersWithInvRes, rolesRes, profilesRes] = await Promise.all([
+        supabase.from('clients').select('*', { count: 'exact', head: true }),
+        supabase.from('clients').select('*', { count: 'exact', head: true }).eq('is_active', true),
+        supabase.from('inventorydata').select('*', { count: 'exact', head: true }),
+        supabase.rpc('get_inventory_customer_count'),
+        supabase.from('roles').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('*', { count: 'exact', head: true })
+      ]);
+
+      setStats({
+        totalClients: clientsRes.count ?? 0,
+        activeClients: activeClientsRes.count ?? 0,
+        totalInventory: inventoryRes.count ?? 0,
+        customersWithInventory: (customersWithInvRes.error ? 0 : (customersWithInvRes.data ?? 0)),
+        totalRoles: rolesRes.count ?? 0,
+        activeUsers: profilesRes.count ?? 0
+      });
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+      setError(err?.message || 'Failed to load dashboard data.');
+    }
+  };
+
+  const monthLabels = useMemo(() => getDaysInCurrentMonth(), []);
+  const chartData = useMemo(() => {
+    const byCustomer = {};
+    dailyInventoryData.forEach((row) => {
+      const day = typeof row.day === 'string' ? row.day : row.day?.toISOString?.()?.slice(0, 10);
+      if (!day) return;
+      const cid = row.customer_id;
+      if (!byCustomer[cid]) byCustomer[cid] = {};
+      byCustomer[cid][day] = Number(row.cnt) || 0;
+    });
+    const labels = monthLabels;
+    const datasets = Object.keys(byCustomer)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((customerId, i) => ({
+        label: clientsMap[customerId] ?? `Customer ${customerId}`,
+        data: labels.map((day) => byCustomer[customerId]?.[day] ?? 0),
+        borderColor: CHART_COLORS[i % CHART_COLORS.length],
+        backgroundColor: CHART_COLORS[i % CHART_COLORS.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+        fill: true,
+        tension: 0.2
+      }))
+      .filter((d) => d.data.some((v) => v > 0) || Object.keys(clientsMap).length === 0);
+    return { labels, datasets };
+  }, [dailyInventoryData, clientsMap, monthLabels]);
+
+  const chartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' },
+      title: { display: true, text: `Daily inventory count by customer — ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}` }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Day' } },
+      y: { beginAtZero: true, title: { display: true, text: 'Inventory count' } }
+    }
+  }), []);
+
+  const salesChartData = useMemo(() => {
+    const byDay = {};
+    dailySalesData.forEach((row) => {
+      const day = typeof row.day === 'string' ? row.day : row.day?.toISOString?.()?.slice(0, 10);
+      if (!day) return;
+      byDay[day] = { cnt: Number(row.cnt) || 0, total_value: Number(row.total_value) || 0 };
+    });
+    const labels = monthLabels;
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Sales (units)',
+          data: labels.map((day) => byDay[day]?.cnt ?? 0),
+          borderColor: 'rgb(249, 115, 22)',
+          backgroundColor: 'rgba(249, 115, 22, 0.12)',
+          fill: true,
+          tension: 0.2,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Sales value ($)',
+          data: labels.map((day) => byDay[day]?.total_value ?? 0),
+          borderColor: 'rgb(20, 184, 166)',
+          backgroundColor: 'rgba(20, 184, 166, 0.12)',
+          fill: true,
+          tension: 0.2,
+          yAxisID: 'y1'
+        }
+      ]
+    };
+  }, [dailySalesData, monthLabels]);
+
+  const salesChartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top' },
+      title: { display: true, text: `Daily sales — ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}` },
+      tooltip: {
+        callbacks: {
+          label(context) {
+            const label = context.dataset.label || '';
+            const value = context.parsed.y;
+            if (label.includes('value')) return `${label}: $${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            return `${label}: ${value}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Day' } },
+      y: {
+        type: 'linear',
+        position: 'left',
+        beginAtZero: true,
+        title: { display: true, text: 'Units sold' }
+      },
+      y1: {
+        type: 'linear',
+        position: 'right',
+        beginAtZero: true,
+        title: { display: true, text: 'Value ($)' },
+        grid: { drawOnChartArea: false }
+      }
+    }
+  }), []);
+
+  const salesByCustomerChartData = useMemo(() => {
+    const byCustomer = {};
+    dailySalesByCustomerData.forEach((row) => {
+      const day = typeof row.day === 'string' ? row.day : row.day?.toISOString?.()?.slice(0, 10);
+      if (!day) return;
+      const cid = row.customer_id;
+      if (!byCustomer[cid]) byCustomer[cid] = {};
+      byCustomer[cid][day] = Number(row.cnt) || 0;
+    });
+    const labels = monthLabels;
+    const datasets = Object.keys(byCustomer)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((customerId, i) => ({
+        label: clientsMap[customerId] ?? `Customer ${customerId}`,
+        data: labels.map((day) => byCustomer[customerId]?.[day] ?? 0),
+        borderColor: CHART_COLORS[i % CHART_COLORS.length],
+        backgroundColor: CHART_COLORS[i % CHART_COLORS.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+        fill: true,
+        tension: 0.2
+      }));
+    return { labels, datasets };
+  }, [dailySalesByCustomerData, clientsMap, monthLabels]);
+
+  const salesByCustomerChartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' },
+      title: { display: true, text: `Daily sales by customer — ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}` }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Day' } },
+      y: { beginAtZero: true, title: { display: true, text: 'Sales (units)' } }
+    }
+  }), []);
+
+  return (
+    <div className="page-content text-xs">
+      {error && (
+        <div className="mb-3 p-2 rounded bg-red-50 text-red-700 text-xs">
+          {error}
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="bg-white p-3 rounded shadow-md">
+          <div className="flex items-center">
+            <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+              <i className="fas fa-users text-sm"></i>
+            </div>
+            <div className="ml-3">
+              <p className="text-gray-600 text-xs">Clients</p>
+              <p className="text-lg font-bold text-gray-800">
+                {stats.activeClients} <span className="font-normal text-gray-500">/ {stats.totalClients}</span>
+              </p>
+              <p className="text-gray-500 text-[10px] mt-0.5">active of total</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-3 rounded shadow-md">
+          <div className="flex items-center">
+            <div className="p-2 rounded-full bg-green-100 text-green-600">
+              <i className="fas fa-boxes text-sm"></i>
+            </div>
+            <div className="ml-3">
+              <p className="text-gray-600 text-xs">Total Inventory</p>
+              <p className="text-lg font-bold text-gray-800">{stats.totalInventory}</p>
+              <p className="text-gray-500 text-[10px] mt-0.5">from {stats.customersWithInventory} customer{stats.customersWithInventory !== 1 ? 's' : ''}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-3 rounded shadow-md">
+          <div className="flex items-center">
+            <div className="p-2 rounded-full bg-yellow-100 text-yellow-600">
+              <i className="fas fa-user-tag text-sm"></i>
+            </div>
+            <div className="ml-3">
+              <p className="text-gray-600 text-xs">Total Roles</p>
+              <p className="text-lg font-bold text-gray-800">{stats.totalRoles}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-3 rounded shadow-md">
+          <div className="flex items-center">
+            <div className="p-2 rounded-full bg-purple-100 text-purple-600">
+              <i className="fas fa-chart-line text-sm"></i>
+            </div>
+            <div className="ml-3">
+              <p className="text-gray-600 text-xs">Active Users</p>
+              <p className="text-lg font-bold text-gray-800">{stats.activeUsers}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-4 rounded shadow-md mb-4">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3">This month — day-to-day inventory by customer</h2>
+        {chartError && (
+          <div className="mb-3 p-2 rounded bg-amber-50 text-amber-800 text-xs">
+            {chartError} (Run migration <code>get_daily_inventory_by_customer.sql</code> if needed.)
+          </div>
+        )}
+        {!chartError && chartData.datasets.length === 0 && (
+          <p className="text-gray-500 text-xs">No inventory data for this month yet.</p>
+        )}
+        {!chartError && chartData.datasets.length > 0 && (
+          <div className="h-64 sm:h-80">
+            <Line data={chartData} options={chartOptions} />
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white p-4 rounded shadow-md mb-4">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3">This month — daily sales</h2>
+        {salesChartError && (
+          <div className="mb-3 p-2 rounded bg-amber-50 text-amber-800 text-xs">
+            {salesChartError} (Run migration <code>get_daily_sales_current_month.sql</code> if needed.)
+          </div>
+        )}
+        {!salesChartError && dailySalesData.length === 0 && (
+          <p className="text-gray-500 text-xs">No sales data for this month yet.</p>
+        )}
+        {!salesChartError && dailySalesData.length > 0 && (
+          <div className="h-64 sm:h-80">
+            <Line data={salesChartData} options={salesChartOptions} />
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white p-4 rounded shadow-md mb-4">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3">This month — sales by customer</h2>
+        {salesByCustomerChartError && (
+          <div className="mb-3 p-2 rounded bg-amber-50 text-amber-800 text-xs">
+            {salesByCustomerChartError} (Run migration <code>get_daily_sales_by_customer.sql</code> if needed.)
+          </div>
+        )}
+        {!salesByCustomerChartError && salesByCustomerChartData.datasets.length === 0 && (
+          <p className="text-gray-500 text-xs">No sales by customer for this month yet.</p>
+        )}
+        {!salesByCustomerChartError && salesByCustomerChartData.datasets.length > 0 && (
+          <div className="h-64 sm:h-80">
+            <Line data={salesByCustomerChartData} options={salesByCustomerChartOptions} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
+
