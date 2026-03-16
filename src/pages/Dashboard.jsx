@@ -52,8 +52,9 @@ const Dashboard = () => {
   const [chartError, setChartError] = useState(null);
   const [salesChartError, setSalesChartError] = useState(null);
   const [salesByCustomerChartError, setSalesByCustomerChartError] = useState(null);
-  const [legendTooltip, setLegendTooltip] = useState({ show: false, text: '', x: 0, y: 0 });
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [inventoryLegendVisible, setInventoryLegendVisible] = useState([]);
+  const [salesByCustomerLegendVisible, setSalesByCustomerLegendVisible] = useState([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -152,7 +153,7 @@ const Dashboard = () => {
   };
 
   const monthLabels = useMemo(() => getDaysInCurrentMonth(), []);
-  const chartData = useMemo(() => {
+  const chartDataBase = useMemo(() => {
     const byCustomer = {};
     dailyInventoryData.forEach((row) => {
       const day = typeof row.day === 'string' ? row.day : row.day?.toISOString?.()?.slice(0, 10);
@@ -173,31 +174,29 @@ const Dashboard = () => {
         fill: true,
         tension: 0.2
       }))
-      .filter((d) => d.data.some((v) => v > 0) || Object.keys(clientsMap).length === 0)
-      .map((d, i) => ({ ...d, hidden: i !== 0 }));
+      .filter((d) => d.data.some((v) => v > 0) || Object.keys(clientsMap).length === 0);
     return { labels, datasets };
   }, [dailyInventoryData, clientsMap, monthLabels]);
 
-  const LEGEND_TOOLTIP_MSG = "Click to show or hide this customer's line";
+  useEffect(() => {
+    const n = chartDataBase.datasets.length;
+    if (n === 0) return;
+    setInventoryLegendVisible((prev) => (prev.length === n ? prev : Array.from({ length: n }, (_, i) => i === 0)));
+  }, [chartDataBase.datasets.length]);
+
+  const chartData = useMemo(() => ({
+    ...chartDataBase,
+    datasets: chartDataBase.datasets.map((d, i) => ({
+      ...d,
+      hidden: !(inventoryLegendVisible[i] ?? i === 0)
+    }))
+  }), [chartDataBase, inventoryLegendVisible]);
+
   const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'top',
-        onHover(evt, item, legend) {
-          const e = evt?.native ?? evt;
-          setLegendTooltip({
-            show: true,
-            text: LEGEND_TOOLTIP_MSG,
-            x: (e?.clientX ?? 0) + 12,
-            y: (e?.clientY ?? 0) + 12
-          });
-        },
-        onLeave() {
-          setLegendTooltip((prev) => ({ ...prev, show: false }));
-        }
-      },
+      legend: { display: false },
       title: { display: true, text: `Daily inventory count by customer — ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}` }
     },
     scales: {
@@ -275,7 +274,7 @@ const Dashboard = () => {
     }
   }), []);
 
-  const salesByCustomerChartData = useMemo(() => {
+  const salesByCustomerChartDataBase = useMemo(() => {
     const byCustomer = {};
     dailySalesByCustomerData.forEach((row) => {
       const day = typeof row.day === 'string' ? row.day : row.day?.toISOString?.()?.slice(0, 10);
@@ -294,31 +293,30 @@ const Dashboard = () => {
         borderColor: CHART_COLORS[i % CHART_COLORS.length],
         backgroundColor: CHART_COLORS[i % CHART_COLORS.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
         fill: true,
-        tension: 0.2,
-        hidden: i !== 0
+        tension: 0.2
       }));
     return { labels, datasets };
   }, [dailySalesByCustomerData, clientsMap, monthLabels]);
+
+  useEffect(() => {
+    const n = salesByCustomerChartDataBase.datasets.length;
+    if (n === 0) return;
+    setSalesByCustomerLegendVisible((prev) => (prev.length === n ? prev : Array.from({ length: n }, (_, i) => i === 0)));
+  }, [salesByCustomerChartDataBase.datasets.length]);
+
+  const salesByCustomerChartData = useMemo(() => ({
+    ...salesByCustomerChartDataBase,
+    datasets: salesByCustomerChartDataBase.datasets.map((d, i) => ({
+      ...d,
+      hidden: !(salesByCustomerLegendVisible[i] ?? i === 0)
+    }))
+  }), [salesByCustomerChartDataBase, salesByCustomerLegendVisible]);
 
   const salesByCustomerChartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'top',
-        onHover(evt, item, legend) {
-          const e = evt?.native ?? evt;
-          setLegendTooltip({
-            show: true,
-            text: LEGEND_TOOLTIP_MSG,
-            x: (e?.clientX ?? 0) + 12,
-            y: (e?.clientY ?? 0) + 12
-          });
-        },
-        onLeave() {
-          setLegendTooltip((prev) => ({ ...prev, show: false }));
-        }
-      },
+      legend: { display: false },
       title: { display: true, text: `Daily sales by customer — ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}` }
     },
     scales: {
@@ -420,9 +418,31 @@ const Dashboard = () => {
           <p className="text-gray-500 text-xs">No inventory data for this month yet.</p>
         )}
         {!chartError && chartData.datasets.length > 0 && (
-          <div className="h-64 sm:h-80">
-            <Line data={chartData} options={chartOptions} />
-          </div>
+          <>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3" role="group" aria-label="Toggle customer series">
+              {chartData.datasets.map((ds, i) => (
+                <label key={ds.label} className="inline-flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={inventoryLegendVisible[i] ?? i === 0}
+                    onChange={() => {
+                      setInventoryLegendVisible((prev) => {
+                        const next = [...(prev.length ? prev : Array.from({ length: chartData.datasets.length }, (_, j) => j === 0))];
+                        next[i] = !(next[i] ?? i === 0);
+                        return next;
+                      });
+                    }}
+                    className="rounded border-gray-400 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: ds.borderColor }} aria-hidden />
+                  <span>{ds.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="h-64 sm:h-80">
+              <Line data={chartData} options={chartOptions} />
+            </div>
+          </>
         )}
       </div>
 
@@ -437,9 +457,31 @@ const Dashboard = () => {
           <p className="text-gray-500 text-xs">No sales by customer for this month yet.</p>
         )}
         {!salesByCustomerChartError && salesByCustomerChartData.datasets.length > 0 && (
-          <div className="h-64 sm:h-80">
-            <Line data={salesByCustomerChartData} options={salesByCustomerChartOptions} />
-          </div>
+          <>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3" role="group" aria-label="Toggle customer series">
+              {salesByCustomerChartData.datasets.map((ds, i) => (
+                <label key={ds.label} className="inline-flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={salesByCustomerLegendVisible[i] ?? i === 0}
+                    onChange={() => {
+                      setSalesByCustomerLegendVisible((prev) => {
+                        const next = [...(prev.length ? prev : Array.from({ length: salesByCustomerChartData.datasets.length }, (_, j) => j === 0))];
+                        next[i] = !(next[i] ?? i === 0);
+                        return next;
+                      });
+                    }}
+                    className="rounded border-gray-400 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: ds.borderColor }} aria-hidden />
+                  <span>{ds.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="h-64 sm:h-80">
+              <Line data={salesByCustomerChartData} options={salesByCustomerChartOptions} />
+            </div>
+          </>
         )}
       </div>
 
@@ -460,16 +502,7 @@ const Dashboard = () => {
         )}
       </div>
 
-      {legendTooltip.show && (
-        <div
-          className="fixed z-50 px-2 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded shadow-md pointer-events-none max-w-[220px]"
-          style={{ left: legendTooltip.x, top: legendTooltip.y }}
-          role="tooltip"
-        >
-          {legendTooltip.text}
-        </div>
-      )}
-    </div>
+      </div>
   );
 };
 
