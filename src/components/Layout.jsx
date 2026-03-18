@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../contexts/AuthContext';
@@ -71,11 +72,17 @@ const Layout = ({ children }) => {
     return () => document.removeEventListener('keydown', onEscape);
   }, [logoutConfirmOpen]);
 
-  const handleLogout = async () => {
-    setLogoutConfirmOpen(false);
-    setUserMenuOpen(false);
-    await logout();
-    navigate('/login');
+  const handleLogout = (e) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    flushSync(() => {
+      setLogoutConfirmOpen(false);
+      setUserMenuOpen(false);
+      logout();
+    });
+    window.setTimeout(() => {
+      navigate('/login', { replace: true });
+    }, 1000);
   };
 
   const openLogoutConfirm = () => {
@@ -308,6 +315,7 @@ const Layout = ({ children }) => {
                 <button
                   type="button"
                   onClick={handleLogout}
+                  onMouseDown={(e) => e.stopPropagation()}
                   className="px-4 py-2.5 text-sm font-medium text-white bg-slate-700 hover:bg-slate-800 rounded-xl transition-colors"
                 >
                   Sign out

@@ -233,14 +233,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+  /** Clear session in UI immediately; sign out on server in background (signOut can hang on bad network). */
+  const logout = () => {
     setCurrentUser(null);
     setConnectionError(null);
+    (async () => {
+      try {
+        await Promise.race([
+          supabase.auth.signOut(),
+          new Promise((resolve) => setTimeout(resolve, 6000))
+        ]);
+      } catch (err) {
+        console.error('Logout error:', err);
+      }
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (_) {
+        /* ensure local session cleared if global signOut hung */
+      }
+    })();
   };
 
   const clearConnectionError = () => setConnectionError(null);
