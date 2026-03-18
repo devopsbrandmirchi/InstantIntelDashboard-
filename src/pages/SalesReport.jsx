@@ -172,6 +172,7 @@ const SalesReport = () => {
       if (key === 'trim') return trim;
       if (key === 'condition') return cond;
       if (key === 'value') return value;
+      if (key === 'location') return (r.location || '').toLowerCase();
       return '';
     };
     rows.sort((a, b) => {
@@ -629,8 +630,24 @@ const SalesReport = () => {
           </div>
 
           <div className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden">
-            <div className="bg-blue-600 text-white px-4 py-1.5">
+            <div className="bg-blue-600 text-white px-4 py-2 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-bold">Sales Report — VINs</h3>
+              <label className="flex items-center gap-2 text-xs font-medium text-white/95">
+                <span className="whitespace-nowrap">Location</span>
+                <select
+                  value={filters.location}
+                  onChange={(e) => setFilters((f) => ({ ...f, location: e.target.value }))}
+                  className="text-gray-800 text-xs px-2 py-1 rounded border border-white/30 bg-white min-w-[160px] max-w-[240px] focus:outline-none focus:ring-2 focus:ring-white/80"
+                  aria-label="Filter VIN list by location"
+                >
+                  <option value="">All locations</option>
+                  {distinctValues.locations.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-[11px] font-mono">
@@ -643,6 +660,7 @@ const SalesReport = () => {
                     <SortableHeader sortKey="brand_model">Brand / Model</SortableHeader>
                     <SortableHeader sortKey="trim">Trim</SortableHeader>
                     <SortableHeader sortKey="condition" align="center">Condition</SortableHeader>
+                    <SortableHeader sortKey="location">Location</SortableHeader>
                     <th className="px-2 py-1.5 text-left font-semibold text-gray-700 uppercase">Image</th>
                     <SortableHeader sortKey="value" align="right">Value</SortableHeader>
                   </tr>
@@ -697,6 +715,9 @@ const SalesReport = () => {
                         <td className="px-2 py-1.5 text-gray-700">{modelVal || '—'}</td>
                         <td className="px-2 py-1.5 text-gray-700">{trimVal || '—'}</td>
                         <td className="px-2 py-1.5 text-center text-gray-700">{condVal || '—'}</td>
+                        <td className="px-2 py-1.5 text-gray-700 max-w-[140px] truncate" title={row.location || ''}>
+                          {(row.location != null && String(row.location).trim() !== '') ? String(row.location).trim() : '—'}
+                        </td>
                         <td className="px-2 py-1.5">
                           {row.image_url ? (
                             <img
@@ -714,7 +735,7 @@ const SalesReport = () => {
                     );
                   })}
                   <tr className="font-semibold bg-gray-100">
-                    <td colSpan="8" className="px-2 py-1.5 text-left text-gray-900">
+                    <td colSpan="9" className="px-2 py-1.5 text-left text-gray-900">
                       Grand Total
                     </td>
                     <td className="px-2 py-1.5 text-right text-gray-900">

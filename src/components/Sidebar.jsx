@@ -1,25 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
+const REPORT_PATHS = ['/inventory-report', '/sales-report', '/inventory-daily-count'];
+const ADMIN_REPORT_PATHS = ['/scrap-feed-stats', '/normalized-scrap-stats'];
+
 const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) => {
-  const [reportsMenuOpen, setReportsMenuOpen] = useState(false);
   const location = useLocation();
   const { currentUser } = useAuth();
   const isActive = (path) => location.pathname === path;
+
+  const [reportsMenuOpen, setReportsMenuOpen] = useState(() =>
+    REPORT_PATHS.some((p) => location.pathname === p)
+  );
+  const [scrappingReportsMenuOpen, setScrappingReportsMenuOpen] = useState(() =>
+    ADMIN_REPORT_PATHS.some((p) => location.pathname === p)
+  );
+
+  useEffect(() => {
+    if (REPORT_PATHS.some((p) => location.pathname === p)) setReportsMenuOpen(true);
+    if (ADMIN_REPORT_PATHS.some((p) => location.pathname === p)) setScrappingReportsMenuOpen(true);
+  }, [location.pathname]);
 
   const handleNavClick = () => {
     if (!isDesktop && onCloseMobile) onCloseMobile();
   };
 
-  const navItems = [
-    { path: '/dashboard', icon: 'fas fa-tachometer-alt', label: 'Dashboard', page: 'dashboard' },
+  const bottomNavItems = [
     { path: '/profile', icon: 'fas fa-user', label: 'User Profile', page: 'profile' },
     { path: '/users', icon: 'fas fa-user-cog', label: 'User Management', page: 'users' },
-    { path: '/clients', icon: 'fas fa-users', label: 'Client Master', page: 'clients' },
     { path: '/roles', icon: 'fas fa-user-tag', label: 'Roles', page: 'roles' },
-    { path: '/inventory', icon: 'fas fa-boxes', label: 'Inventory', page: 'inventory' },
+    { path: '/inventory', icon: 'fas fa-boxes', label: 'Inventory', page: 'inventory' }
   ];
+
+  const submenuLinkClass = (path) =>
+    `nav-submenu-link flex items-center px-4 py-2 pl-12 text-white/75 hover:bg-white/10 hover:text-white rounded-md ${
+      isActive(path) ? 'active' : ''
+    }`;
 
   return (
     <div
@@ -53,27 +70,36 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
       </div>
       <nav className="mt-4">
         <ul className="space-y-2">
-          {navItems.map((item) => (
-            <li key={item.path}>
-              <Link
-                to={item.path}
-                onClick={handleNavClick}
-                className={`nav-link flex items-center px-4 py-2 text-white/85 hover:bg-white/10 hover:text-white rounded-md ${
-                  isActive(item.path) ? 'active' : ''
-                }`}
-                data-page={item.page}
-              >
-                <i className={`${item.icon} mr-3`}></i>
-                <span className="nav-text">{item.label}</span>
-              </Link>
-            </li>
-          ))}
+          {/* 1. Dashboard */}
+          <li>
+            <Link
+              to="/dashboard"
+              onClick={handleNavClick}
+              className={`nav-link nav-link-top-level flex items-center px-4 py-2 text-white/90 hover:bg-white/10 hover:text-white rounded-md border-l-[3px] border-transparent ${
+                isActive('/dashboard') ? 'active' : ''
+              }`}
+              data-page="dashboard"
+            >
+              <i className="fas fa-tachometer-alt mr-3"></i>
+              <span className="nav-text">Dashboard</span>
+            </Link>
+          </li>
+
+          <li className="list-none sidebar-nav-section-label" aria-hidden="true">
+            <div className="nav-section-title px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+              Reporting
+            </div>
+          </li>
+
+          {/* 2. Reports */}
           <li>
             <div className="nav-menu-item">
               <button
+                type="button"
                 onClick={() => setReportsMenuOpen(!reportsMenuOpen)}
                 className="nav-link flex items-center justify-between w-full px-4 py-2 text-white/85 hover:bg-white/10 hover:text-white rounded-md"
                 id="reportsMenuToggle"
+                aria-expanded={reportsMenuOpen}
               >
                 <div className="flex items-center">
                   <i className="fas fa-chart-bar mr-3"></i>
@@ -86,9 +112,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
                   <Link
                     to="/inventory-report"
                     onClick={handleNavClick}
-                    className={`nav-submenu-link flex items-center px-4 py-2 pl-12 text-white/75 hover:bg-white/10 hover:text-white rounded-md ${
-                      isActive('/inventory-report') ? 'active' : ''
-                    }`}
+                    className={submenuLinkClass('/inventory-report')}
                     data-page="inventory-report"
                   >
                     <i className="fas fa-file-alt mr-3 text-sm"></i>
@@ -99,9 +123,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
                   <Link
                     to="/sales-report"
                     onClick={handleNavClick}
-                    className={`nav-submenu-link flex items-center px-4 py-2 pl-12 text-white/75 hover:bg-white/10 hover:text-white rounded-md ${
-                      isActive('/sales-report') ? 'active' : ''
-                    }`}
+                    className={submenuLinkClass('/sales-report')}
                     data-page="sales-report"
                   >
                     <i className="fas fa-chart-line mr-3 text-sm"></i>
@@ -112,31 +134,99 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
                   <Link
                     to="/inventory-daily-count"
                     onClick={handleNavClick}
-                    className={`nav-submenu-link flex items-center px-4 py-2 pl-12 text-white/75 hover:bg-white/10 hover:text-white rounded-md ${
-                      isActive('/inventory-daily-count') ? 'active' : ''
-                    }`}
+                    className={submenuLinkClass('/inventory-daily-count')}
                     data-page="inventory-daily-count"
                   >
                     <i className="fas fa-list-ol mr-3 text-sm"></i>
                     <span className="nav-text">Daily Inventory Count</span>
                   </Link>
                 </li>
+              </ul>
+            </div>
+          </li>
+
+          {/* 3. Scrapping Reports */}
+          <li>
+            <div className="nav-menu-item">
+              <button
+                type="button"
+                onClick={() => setScrappingReportsMenuOpen(!scrappingReportsMenuOpen)}
+                className="nav-link flex items-center justify-between w-full px-4 py-2 text-white/85 hover:bg-white/10 hover:text-white rounded-md"
+                id="scrappingReportsMenuToggle"
+                aria-expanded={scrappingReportsMenuOpen}
+              >
+                <div className="flex items-center">
+                  <i className="fas fa-spider mr-3" aria-hidden="true"></i>
+                  <span className="nav-text">Scrapping Reports</span>
+                </div>
+                <i className={`fas fa-chevron-down text-xs nav-chevron ${scrappingReportsMenuOpen ? 'rotate-180' : ''}`}></i>
+              </button>
+              <ul className={`nav-submenu ${scrappingReportsMenuOpen ? 'show' : 'hidden'}`} id="scrappingReportsSubmenu">
                 <li>
                   <Link
                     to="/scrap-feed-stats"
                     onClick={handleNavClick}
-                    className={`nav-submenu-link flex items-center px-4 py-2 pl-12 text-white/75 hover:bg-white/10 hover:text-white rounded-md ${
-                      isActive('/scrap-feed-stats') ? 'active' : ''
-                    }`}
+                    className={submenuLinkClass('/scrap-feed-stats')}
                     data-page="scrap-feed-stats"
                   >
                     <i className="fas fa-table mr-3 text-sm"></i>
                     <span className="nav-text">Scrap feed stats</span>
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    to="/normalized-scrap-stats"
+                    onClick={handleNavClick}
+                    className={submenuLinkClass('/normalized-scrap-stats')}
+                    data-page="normalized-scrap-stats"
+                  >
+                    <i className="fas fa-layer-group mr-3 text-sm"></i>
+                    <span className="nav-text">Normalized scrap stats</span>
+                  </Link>
+                </li>
               </ul>
             </div>
           </li>
+
+          {/* Section break: after Scrapping Reports */}
+          <li className="sidebar-nav-section-break sidebar-nav-section-label list-none" aria-hidden="true">
+            <div className="nav-section-divider mx-3 my-2 border-t border-white/25" />
+            <div className="nav-section-title px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+              Management
+            </div>
+          </li>
+
+          {/* Client Master & below */}
+          <li>
+            <Link
+              to="/clients"
+              onClick={handleNavClick}
+              className={`nav-link nav-link-top-level flex items-center px-4 py-2 text-white/90 hover:bg-white/10 hover:text-white rounded-md border-l-[3px] border-transparent ${
+                isActive('/clients') ? 'active' : ''
+              }`}
+              data-page="clients"
+            >
+              <i className="fas fa-users mr-3 text-sky-300/90"></i>
+              <span className="nav-text font-medium">Client Master</span>
+            </Link>
+          </li>
+
+          {/* User Profile, User Management, Roles, Inventory */}
+          {bottomNavItems.map((item) => (
+            <li key={item.path}>
+              <Link
+                to={item.path}
+                onClick={handleNavClick}
+                className={`nav-link nav-link-top-level flex items-center px-4 py-2 text-white/90 hover:bg-white/10 hover:text-white rounded-md border-l-[3px] border-transparent ${
+                  isActive(item.path) ? 'active' : ''
+                }`}
+                data-page={item.page}
+              >
+                <i className={`${item.icon} mr-3`}></i>
+                <span className="nav-text">{item.label}</span>
+              </Link>
+            </li>
+          ))}
         </ul>
       </nav>
     </div>
@@ -144,4 +234,3 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
 };
 
 export default Sidebar;
-

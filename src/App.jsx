@@ -13,6 +13,7 @@ import InventoryReport from './pages/InventoryReport';
 import SalesReport from './pages/SalesReport';
 import InventoryDailyCount from './pages/InventoryDailyCount';
 import ScrapRawdataStats from './pages/ScrapRawdataStats';
+import NormalizedInventoryScrapStats from './pages/NormalizedInventoryScrapStats';
 import UserManagement from './pages/UserManagement';
 
 const PrivateRoute = ({ children }) => {
@@ -157,6 +158,16 @@ function App() {
               <PrivateRoute>
                 <Layout>
                   <ScrapRawdataStats />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/normalized-scrap-stats"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <NormalizedInventoryScrapStats />
                 </Layout>
               </PrivateRoute>
             }

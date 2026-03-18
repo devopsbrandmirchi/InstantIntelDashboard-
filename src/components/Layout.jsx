@@ -104,7 +104,8 @@ const Layout = ({ children }) => {
     '/inventory-report': 'Inventory Report',
     '/sales-report': 'Sales Report',
     '/inventory-daily-count': 'Daily Inventory Count',
-    '/scrap-feed-stats': 'Scrap feed statistics'
+    '/scrap-feed-stats': 'Scrap feed statistics',
+    '/normalized-scrap-stats': 'Normalized scrap inventory stats'
   };
 
   const pageTitle = pageTitles[location.pathname] || 'Dashboard';

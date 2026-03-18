@@ -63,6 +63,7 @@
 .sidebar.sidebar-themed .nav-link[data-page="inventory"] i { color: #fca5a5; }
 .sidebar.sidebar-themed .nav-link[data-page="reports"] i,
 .sidebar.sidebar-themed #reportsMenuToggle i { color: #5eead4; }
+.sidebar.sidebar-themed #scrappingReportsMenuToggle .flex.items-center > i { color: #a5b4fc; }
 .sidebar.sidebar-themed .nav-submenu-link {
     color: rgba(255, 255, 255, 0.78);
 }
@@ -209,6 +210,29 @@
 
 .sidebar.collapsed .nav-submenu {
     display: none !important;
+}
+
+.sidebar.collapsed .nav-section-title {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-nav-section-label {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-nav-section-break .nav-section-divider {
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Top-level nav (Dashboard, Management block): distinct from indented report submenus */
+.sidebar.sidebar-themed .nav-link-top-level {
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+.sidebar.sidebar-themed .nav-link-top-level.active {
+    border-left-color: #f59e0b;
 }
 
 /* Main content adjustments */
