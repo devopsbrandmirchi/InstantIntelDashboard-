@@ -467,7 +467,7 @@ def upsert_chunks(
     return total
 
 
-def clients_active_pulls(
+def clients_for_hoot_import(
     supabase: Client, active_pull_only: bool, single_id: Optional[int] = None
 ) -> List[dict]:
     r = supabase.table("clients").select("id, full_name, inventory_api, active_pull, scrap_feed").execute()
@@ -484,6 +484,49 @@ def clients_active_pulls(
                 continue
         out.append(c)
     return out
+
+
+def print_import_diagnostics(supabase: Client, active_pull_only: bool) -> None:
+    """Explain why 0 clients might run: empty inventory_api, RLS, or active_pull filter."""
+    r = supabase.table("clients").select("id, full_name, inventory_api, active_pull, scrap_feed").execute()
+    rows = r.data or []
+    total = len(rows)
+    with_url = sum(1 for c in rows if c.get("inventory_api") and str(c.get("inventory_api")).strip())
+    if active_pull_only:
+        eligible_flags = sum(
+            1
+            for c in rows
+            if c.get("inventory_api")
+            and str(c.get("inventory_api")).strip()
+            and c.get("active_pull")
+            and not c.get("scrap_feed")
+        )
+    else:
+        eligible_flags = with_url
+
+    print(f"clients rows visible to this key: {total}")
+    print(f"clients with non-empty inventory_api (Hoot CSV URL): {with_url}")
+    if active_pull_only:
+        print(
+            f"clients matching HOOT_ACTIVE_PULL_ONLY (active_pull & not scrap_feed & has URL): {eligible_flags}"
+        )
+
+    if total == 0:
+        print(
+            "\n*** No rows returned from public.clients. "
+            "Use SUPABASE_SERVICE_ROLE_KEY in GitHub Actions (not the anon key). "
+            "If using the service role and this persists, confirm clients exist in the project. ***\n"
+        )
+    elif with_url == 0:
+        print(
+            "\n*** No client has inventory_api set. "
+            "In Supabase Table Editor or Client Master, set each dealer's inventory_api to the full Hoot CSV feed URL. ***\n"
+        )
+    elif active_pull_only and eligible_flags == 0 and with_url > 0:
+        print(
+            "\n*** HOOT_ACTIVE_PULL_ONLY=1 but no client has active_pull=true and scrap_feed=false with a URL. "
+            "Adjust client flags or set HOOT_ACTIVE_PULL_ONLY=0 to import all clients that have inventory_api. ***\n"
+        )
 
 
 def main() -> None:
@@ -512,8 +555,10 @@ def main() -> None:
     pull_date_time = now
     print("Start Hoot inventory import:", now)
 
-    clients = clients_active_pulls(supabase, active_pull_only, args.client_id)
-    print(f"Clients with inventory_api: {len(clients)} (active_pull_only={active_pull_only})")
+    print_import_diagnostics(supabase, active_pull_only)
+
+    clients = clients_for_hoot_import(supabase, active_pull_only, args.client_id)
+    print(f"Clients selected for import: {len(clients)} (active_pull_only={active_pull_only})")
 
     custom_make_dictionary = get_custom_make_dictionary(supabase)
     custom_type_dictionary = get_custom_type_dictionary(supabase)

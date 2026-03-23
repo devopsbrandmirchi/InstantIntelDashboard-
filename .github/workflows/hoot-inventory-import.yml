@@ -2,7 +2,9 @@
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL                 Project URL (https://xxxx.supabase.co)
-#   SUPABASE_SERVICE_ROLE_KEY    Service role key (never use anon key)
+#   SUPABASE_SERVICE_ROLE_KEY    Service role key (never use anon key — anon cannot read clients if RLS blocks it)
+#
+# Data: each row in public.clients needs inventory_api = full Hoot CSV URL or the job imports 0 rows.
 #
 # Optional repository variables (Settings → Variables → Actions):
 #   HOOT_ACTIVE_PULL_ONLY        Set to 1 to only process clients with active_pull and not scrap_feed
