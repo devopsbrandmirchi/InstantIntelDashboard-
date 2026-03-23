@@ -17,6 +17,10 @@ const ClientInventorySources = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  /** all | scrap | hoot | other — other = both flags or neither */
+  const [sourceFilter, setSourceFilter] = useState('all');
+  /** all | active | inactive — is_active */
+  const [activeFilter, setActiveFilter] = useState('all');
   const [sourceUpdatingId, setSourceUpdatingId] = useState(null);
   const [activeTogglingId, setActiveTogglingId] = useState(null);
   const [parentDraft, setParentDraft] = useState({});
@@ -71,9 +75,31 @@ const ClientInventorySources = () => {
   };
 
   const searchLower = searchQuery.trim().toLowerCase();
+
+  const matchesSourceFilter = useCallback((c) => {
+    if (sourceFilter === 'all') return true;
+    const scrap = !!c.scrap_feed;
+    const pull = !!c.active_pull;
+    if (sourceFilter === 'scrap') return scrap && !pull;
+    if (sourceFilter === 'hoot') return pull && !scrap;
+    if (sourceFilter === 'other') return (scrap && pull) || (!scrap && !pull);
+    return true;
+  }, [sourceFilter]);
+
+  const matchesActiveFilter = useCallback(
+    (c) => {
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'active') return !!c.is_active;
+      if (activeFilter === 'inactive') return !c.is_active;
+      return true;
+    },
+    [activeFilter]
+  );
+
   const filteredClients = useMemo(() => {
-    if (!searchLower) return clients;
-    return clients.filter((c) => {
+    let list = clients.filter(matchesSourceFilter).filter(matchesActiveFilter);
+    if (!searchLower) return list;
+    return list.filter((c) => {
       const hay = [
         c.full_name,
         c.dealership_name,
@@ -85,7 +111,7 @@ const ClientInventorySources = () => {
         .toLowerCase();
       return hay.includes(searchLower);
     });
-  }, [clients, searchLower]);
+  }, [clients, searchLower, matchesSourceFilter, matchesActiveFilter]);
 
   const patchClientLocal = useCallback((id, patch) => {
     setClients((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -215,19 +241,52 @@ const ClientInventorySources = () => {
           </p>
         </div>
 
-        <div className="px-4 py-3 sm:px-5 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-          <div className="relative flex-1 max-w-md">
-            <i
-              className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"
-              aria-hidden
-            />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, dealership, parent code, or ID…"
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:border-slate-300"
-            />
+        <div className="px-4 py-3 sm:px-5 border-b border-slate-100 bg-slate-50/80 flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 flex-1 min-w-0">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <i
+                className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, dealership, parent code, or ID…"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:border-slate-300"
+              />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <label htmlFor="hoot-source-filter" className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                Source
+              </label>
+              <select
+                id="hoot-source-filter"
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className="text-sm px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400/40 min-w-[11rem]"
+              >
+                <option value="all">All sources</option>
+                <option value="scrap">Scrap feed</option>
+                <option value="hoot">Hoot (API)</option>
+                <option value="other">Both or not set</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <label htmlFor="hoot-active-filter" className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                Status
+              </label>
+              <select
+                id="hoot-active-filter"
+                value={activeFilter}
+                onChange={(e) => setActiveFilter(e.target.value)}
+                className="text-sm px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400/40 min-w-[9.5rem]"
+              >
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
           <button
             type="button"
@@ -270,7 +329,7 @@ const ClientInventorySources = () => {
             <div className="px-5 py-12 text-center text-slate-500 text-sm">
               {clients.length === 0
                 ? 'No clients found.'
-                : 'No clients match your search. Try a different term.'}
+                : 'No clients match your search or filters. Adjust filters and try again.'}
             </div>
           ) : (
             <table className="min-w-full text-sm text-left">
