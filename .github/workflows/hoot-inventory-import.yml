@@ -1,0 +1,75 @@
+# Fetch Hoot CSV per client (clients.inventory_api) and upsert into Supabase hoot_inventory.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                 Project URL (https://xxxx.supabase.co)
+#   SUPABASE_SERVICE_ROLE_KEY    Service role key (never use anon key)
+#
+# Optional repository variables (Settings → Variables → Actions):
+#   HOOT_ACTIVE_PULL_ONLY        Set to 1 to only process clients with active_pull and not scrap_feed
+#   HOOT_CHUNK_SIZE              Rows per upsert batch (default 300)
+
+name: Hoot inventory import
+
+on:
+  schedule:
+    # Daily 06:15 UTC — adjust cron as needed (minute hour day month weekday)
+    - cron: '15 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Parse CSV and build rows only; do not write to Supabase
+        required: false
+        default: false
+        type: boolean
+      client_id:
+        description: Optional — process only this clients.id (leave empty for all)
+        required: false
+        type: string
+
+concurrency:
+  group: hoot-inventory-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    name: Run Python import
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scripts/hoot_inventory/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r scripts/hoot_inventory/requirements.txt
+
+      - name: Run Hoot inventory import
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          HOOT_ACTIVE_PULL_ONLY: ${{ vars.HOOT_ACTIVE_PULL_ONLY }}
+          HOOT_CHUNK_SIZE: ${{ vars.HOOT_CHUNK_SIZE }}
+        run: |
+          set -e
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]; then
+            echo "::error::Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY secrets."
+            exit 1
+          fi
+          ARGS=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              ARGS="$ARGS --dry-run"
+            fi
+            CID='${{ inputs.client_id }}'
+            if [ -n "$CID" ]; then
+              ARGS="$ARGS --client-id $CID"
+            fi
+          fi
+          python scripts/hoot_inventory/hoot_inventory_import.py $ARGS
