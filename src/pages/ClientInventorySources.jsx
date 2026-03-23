@@ -3,7 +3,16 @@ import { supabase } from '../lib/supabase';
 import { withTimeout } from '../lib/requestWithTimeout';
 
 const CLIENTS_LOAD_TIMEOUT_MS = 45000;
+const COUNT_LOAD_TIMEOUT_MS = 90000;
 const PARENT_MAX_LEN = 4;
+
+/** YYYY-MM-DD in local timezone (matches “today” in the UI). */
+function formatLocalYmd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 const inventoryLabel = (scrap, pull) => {
   if (scrap && pull) return { text: 'Both enabled', tone: 'amber' };
@@ -27,6 +36,13 @@ const ClientInventorySources = () => {
   const [parentSavingId, setParentSavingId] = useState(null);
   const [dealershipDraft, setDealershipDraft] = useState({});
   const [dealershipSavingId, setDealershipSavingId] = useState(null);
+  /** customer_id -> row count for countDateStr in hoot_inventory */
+  const [hootTodayByCustomerId, setHootTodayByCustomerId] = useState({});
+  /** lower(trim(dealership_name)) -> row count for countDateStr in scrap_rawdata */
+  const [scrapTodayByDealerLower, setScrapTodayByDealerLower] = useState({});
+  const [countDateStr, setCountDateStr] = useState(() => formatLocalYmd(new Date()));
+  const [countsLoading, setCountsLoading] = useState(false);
+  const [countsError, setCountsError] = useState('');
   const mountedRef = React.useRef(true);
 
   useEffect(() => {
@@ -36,6 +52,66 @@ const ClientInventorySources = () => {
       mountedRef.current = false;
     };
   }, []);
+
+  const loadTodayCounts = async (dateStr) => {
+    if (!mountedRef.current) return;
+    setCountsLoading(true);
+    setCountsError('');
+    setCountDateStr(dateStr);
+
+    const fetchPaged = async (selectCols, table, eqCol, eqVal) => {
+      const pageSize = 1000;
+      let from = 0;
+      const acc = [];
+      for (;;) {
+        const { data, error } = await withTimeout(
+          supabase.from(table).select(selectCols).eq(eqCol, eqVal).range(from, from + pageSize - 1),
+          COUNT_LOAD_TIMEOUT_MS,
+          'Loading today counts timed out.'
+        );
+        if (error) throw error;
+        if (!data?.length) break;
+        acc.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return acc;
+    };
+
+    try {
+      const [hootRows, scrapRows] = await Promise.all([
+        fetchPaged('customer_id', 'hoot_inventory', 'pull_date', dateStr),
+        fetchPaged('dealership_name', 'scrap_rawdata', 'creation_date', dateStr)
+      ]);
+
+      const hootMap = {};
+      for (const r of hootRows) {
+        const id = r.customer_id;
+        if (id == null) continue;
+        hootMap[id] = (hootMap[id] || 0) + 1;
+      }
+      const scrapMap = {};
+      for (const r of scrapRows) {
+        const key = (r.dealership_name || '').trim().toLowerCase();
+        if (!key) continue;
+        scrapMap[key] = (scrapMap[key] || 0) + 1;
+      }
+
+      if (mountedRef.current) {
+        setHootTodayByCustomerId(hootMap);
+        setScrapTodayByDealerLower(scrapMap);
+      }
+    } catch (err) {
+      console.error('Error loading today counts:', err);
+      if (mountedRef.current) {
+        setHootTodayByCustomerId({});
+        setScrapTodayByDealerLower({});
+        setCountsError(err?.message || 'Could not load today counts.');
+      }
+    } finally {
+      if (mountedRef.current) setCountsLoading(false);
+    }
+  };
 
   const loadClients = async () => {
     setLoading(true);
@@ -60,6 +136,8 @@ const ClientInventorySources = () => {
           Object.fromEntries(list.map((c) => [c.id, c.dealership_name ?? '']))
         );
       }
+      const today = formatLocalYmd(new Date());
+      await loadTodayCounts(today);
     } catch (err) {
       console.error('Error loading clients:', err);
       if (mountedRef.current) {
@@ -190,6 +268,7 @@ const ClientInventorySources = () => {
       setDealershipDraft((prev) => ({ ...prev, [client.id]: forDb ?? '' }));
       setMessage({ type: 'success', text: 'Dealership name saved.' });
       window.setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      await loadTodayCounts(countDateStr || formatLocalYmd(new Date()));
     } catch (err) {
       console.error(err);
       setMessage({ type: 'error', text: err?.message || 'Could not save dealership name.' });
@@ -237,7 +316,10 @@ const ClientInventorySources = () => {
           <h2 className="text-lg font-semibold tracking-tight text-white">Client inventory sources</h2>
           <p className="mt-1 text-sm text-slate-300 max-w-2xl">
             Choose whether inventory is ingested via scrap feed or Hoot API pull, set dealership display names,
-            account status, and the four-character parent client code.
+            account status, and the four-character parent client code. Row counts for today use your browser’s
+            local date and match <span className="text-slate-200">hoot_inventory.pull_date</span> and{' '}
+            <span className="text-slate-200">scrap_rawdata.creation_date</span> to{' '}
+            <span className="text-slate-200">clients.dealership_name</span> (scrap).
           </p>
         </div>
 
@@ -298,6 +380,12 @@ const ClientInventorySources = () => {
           </button>
         </div>
 
+        {countsError && (
+          <div className="mx-4 sm:mx-5 mt-3 px-3 py-2 rounded-lg text-sm border border-amber-200 bg-amber-50 text-amber-900">
+            Today counts: {countsError}
+          </div>
+        )}
+
         {message.text && (
           <div
             className={`mx-4 sm:mx-5 mt-4 px-4 py-3 rounded-lg text-sm flex flex-wrap items-center justify-between gap-2 border ${
@@ -337,6 +425,18 @@ const ClientInventorySources = () => {
                 <tr className="bg-slate-100/90 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                   <th className="px-4 py-3 whitespace-nowrap">Client</th>
                   <th className="px-4 py-3 whitespace-nowrap min-w-[200px]">Dealership name</th>
+                  <th className="px-4 py-3 whitespace-nowrap text-center min-w-[5.5rem]">
+                    <div>Today Hoot</div>
+                    <div className="text-[10px] font-normal normal-case text-slate-500 mt-0.5">
+                      {countsLoading ? '…' : countDateStr}
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 whitespace-nowrap text-center min-w-[5.5rem]">
+                    <div>Today scrap</div>
+                    <div className="text-[10px] font-normal normal-case text-slate-500 mt-0.5">
+                      {countsLoading ? '…' : countDateStr}
+                    </div>
+                  </th>
                   <th className="px-4 py-3 whitespace-nowrap bg-amber-100 text-amber-950 font-bold uppercase tracking-wide border-x border-amber-200/80">
                     Current source
                   </th>
@@ -374,6 +474,24 @@ const ClientInventorySources = () => {
                             {dealershipSavingId === client.id ? 'Saving…' : 'Save'}
                           </button>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 align-top text-center tabular-nums text-slate-800">
+                        {countsLoading ? (
+                          <span className="text-slate-400">…</span>
+                        ) : (
+                          hootTodayByCustomerId[client.id] ?? 0
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top text-center tabular-nums text-slate-800">
+                        {countsLoading ? (
+                          <span className="text-slate-400">…</span>
+                        ) : (client.dealership_name || '').trim() ? (
+                          scrapTodayByDealerLower[(client.dealership_name || '').trim().toLowerCase()] ?? 0
+                        ) : (
+                          <span className="text-slate-400" title="Set dealership name to match scrap feed">
+                            —
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 align-top bg-amber-50/60 border-x border-amber-100">
                         <span
