@@ -17,6 +17,7 @@ import ScrapRawdataStats from './pages/ScrapRawdataStats';
 import NormalizedInventoryScrapStats from './pages/NormalizedInventoryScrapStats';
 import UserManagement from './pages/UserManagement';
 import AppLoadingScreen from './components/AppLoadingScreen';
+import SendgridEventStats from './pages/SendgridEventStats';
 
 const PrivateRoute = ({ children }) => {
   const { currentUser, loading } = useAuth();
@@ -180,6 +181,16 @@ function App() {
               <PrivateRoute>
                 <Layout>
                   <NormalizedInventoryScrapStats />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/sendgrid-event-stats"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <SendgridEventStats />
                 </Layout>
               </PrivateRoute>
             }
