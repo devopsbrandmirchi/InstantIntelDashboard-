@@ -13,8 +13,10 @@ import Inventory from './pages/Inventory';
 import InventoryReport from './pages/InventoryReport';
 import SalesReport from './pages/SalesReport';
 import InventoryDailyCount from './pages/InventoryDailyCount';
+import DailySalesCount from './pages/DailySalesCount';
 import ScrapRawdataStats from './pages/ScrapRawdataStats';
 import NormalizedInventoryScrapStats from './pages/NormalizedInventoryScrapStats';
+import HootInventoryStats from './pages/HootInventoryStats';
 import UserManagement from './pages/UserManagement';
 import AppLoadingScreen from './components/AppLoadingScreen';
 import SendgridEventStats from './pages/SendgridEventStats';
@@ -167,6 +169,16 @@ function App() {
             }
           />
           <Route
+            path="/daily-sales-count"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <DailySalesCount />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/scrap-feed-stats"
             element={
               <PrivateRoute>
@@ -182,6 +194,16 @@ function App() {
               <PrivateRoute>
                 <Layout>
                   <NormalizedInventoryScrapStats />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/hoot-feed-stats"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <HootInventoryStats />
                 </Layout>
               </PrivateRoute>
             }

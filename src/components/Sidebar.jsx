@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const REPORT_PATHS = ['/inventory-report', '/sales-report', '/inventory-daily-count'];
-const ADMIN_REPORT_PATHS = ['/scrap-feed-stats', '/normalized-scrap-stats'];
+const REPORT_PATHS = ['/inventory-report', '/sales-report', '/inventory-daily-count', '/daily-sales-count'];
+const ADMIN_REPORT_PATHS = ['/scrap-feed-stats', '/normalized-scrap-stats', '/hoot-feed-stats'];
 
 const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) => {
   const location = useLocation();
@@ -141,6 +141,17 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
                     <span className="nav-text">Daily Inventory Count</span>
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    to="/daily-sales-count"
+                    onClick={handleNavClick}
+                    className={submenuLinkClass('/daily-sales-count')}
+                    data-page="daily-sales-count"
+                  >
+                    <i className="fas fa-receipt mr-3 text-sm"></i>
+                    <span className="nav-text">Daily Sales Count</span>
+                  </Link>
+                </li>
               </ul>
             </div>
           </li>
@@ -182,6 +193,17 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
                   >
                     <i className="fas fa-layer-group mr-3 text-sm"></i>
                     <span className="nav-text">Normalized scrap stats</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/hoot-feed-stats"
+                    onClick={handleNavClick}
+                    className={submenuLinkClass('/hoot-feed-stats')}
+                    data-page="hoot-feed-stats"
+                  >
+                    <i className="fas fa-satellite-dish mr-3 text-sm"></i>
+                    <span className="nav-text">Hoot feed stats</span>
                   </Link>
                 </li>
               </ul>
