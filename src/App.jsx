@@ -33,6 +33,18 @@ const PrivateRoute = ({ children }) => {
   return currentUser ? children : <Navigate to="/login" />;
 };
 
+const RoleRoute = ({ children, allowViewer = false }) => {
+  const { currentUser, loading } = useAuth();
+  if (loading) return <AppLoadingScreen message="Verifying access…" />;
+  if (!currentUser) return <Navigate to="/login" replace />;
+
+  const role = (currentUser.role || 'viewer').toLowerCase();
+  if (role === 'admin') return children;
+  if (role === 'viewer' && allowViewer) return children;
+
+  return <Navigate to="/dashboard" replace />;
+};
+
 const GuestRoute = ({ children }) => {
   const { currentUser, loading } = useAuth();
 
@@ -82,171 +94,171 @@ function App() {
           <Route
             path="/dashboard"
             element={
-              <PrivateRoute>
+              <RoleRoute allowViewer>
                 <Layout>
                   <Dashboard />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/profile"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <Profile />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/clients"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <Clients />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/client-inventory-sources"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <ClientInventorySources />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/roles"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <Roles />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/inventory"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <Inventory />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/inventory-report"
             element={
-              <PrivateRoute>
+              <RoleRoute allowViewer>
                 <Layout>
                   <InventoryReport />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/sales-report"
             element={
-              <PrivateRoute>
+              <RoleRoute allowViewer>
                 <Layout>
                   <SalesReport />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/inventory-daily-count"
             element={
-              <PrivateRoute>
+              <RoleRoute allowViewer>
                 <Layout>
                   <InventoryDailyCount />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/daily-sales-count"
             element={
-              <PrivateRoute>
+              <RoleRoute allowViewer>
                 <Layout>
                   <DailySalesCount />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/scrap-feed-stats"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <ScrapRawdataStats />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/normalized-scrap-stats"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <NormalizedInventoryScrapStats />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/hoot-feed-stats"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <HootInventoryStats />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/sendgrid-event-stats"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <SendgridEventStats />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/sendgrid-autoname-event-stats"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <SendgridAutonameEventStats />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/users"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <UserManagement />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route
             path="/login-history"
             element={
-              <PrivateRoute>
+              <RoleRoute>
                 <Layout>
                   <LoginHistory />
                 </Layout>
-              </PrivateRoute>
+              </RoleRoute>
             }
           />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

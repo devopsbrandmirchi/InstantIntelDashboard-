@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { withTimeout } from '../lib/requestWithTimeout';
+import { useAuth } from '../contexts/AuthContext';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import DateRangePicker from '../components/DateRangePicker';
@@ -43,6 +44,13 @@ const TRIM_KEYS = [
 ];
 
 const SalesReport = () => {
+  const { currentUser } = useAuth();
+  const isAdmin = (currentUser?.role || '').toLowerCase() === 'admin';
+  const isRestrictedByAssignment = !isAdmin;
+  const assignedClientIds = useMemo(
+    () => (Array.isArray(currentUser?.assignedClientIds) ? currentUser.assignedClientIds.map(Number).filter(Number.isFinite) : []),
+    [currentUser?.assignedClientIds]
+  );
   const [clients, setClients] = useState([]);
   const [clientsError, setClientsError] = useState(null);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -85,11 +93,14 @@ const SalesReport = () => {
     setClientsError(null);
     try {
       const { data, error } = await withTimeout(
-        supabase
-          .from('clients')
-          .select('id, full_name')
-          .eq('is_active', true)
-          .order('full_name'),
+        (() => {
+          let q = supabase.from('clients').select('id, full_name').eq('is_active', true);
+          if (isRestrictedByAssignment) {
+            if (assignedClientIds.length === 0) return q.limit(0);
+            q = q.in('id', assignedClientIds);
+          }
+          return q.order('full_name');
+        })(),
         CLIENTS_LOAD_TIMEOUT_MS,
         'Loading clients timed out. Click Retry or refresh the page.'
       );
@@ -114,6 +125,14 @@ const SalesReport = () => {
         .from('saleprocessedvins')
         .select('*')
         .not('final_sold_date', 'is', null);
+      if (isRestrictedByAssignment) {
+        if (assignedClientIds.length === 0) {
+          setRawRows([]);
+          setLoading(false);
+          return;
+        }
+        q = q.in('customer_id', assignedClientIds);
+      }
       if (selectedClientId) q = q.eq('customer_id', Number(selectedClientId));
       if (dateFrom) q = q.gte('final_sold_date', dateFrom);
       if (dateTo) q = q.lte('final_sold_date', dateTo);
@@ -134,7 +153,7 @@ const SalesReport = () => {
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [currentUser?.id, isRestrictedByAssignment, assignedClientIds.join(',')]);
 
   useEffect(() => {
     loadSalesData();

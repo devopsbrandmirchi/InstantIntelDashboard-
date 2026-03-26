@@ -9,18 +9,25 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
   const location = useLocation();
   const { currentUser } = useAuth();
   const isActive = (path) => location.pathname === path;
+  const role = (currentUser?.role || 'viewer').toLowerCase();
+  const isAdmin = role === 'admin';
+  const isViewer = role === 'viewer';
 
   const [reportsMenuOpen, setReportsMenuOpen] = useState(() =>
-    REPORT_PATHS.some((p) => location.pathname === p)
+    isViewer || REPORT_PATHS.some((p) => location.pathname === p)
   );
   const [scrappingReportsMenuOpen, setScrappingReportsMenuOpen] = useState(() =>
     ADMIN_REPORT_PATHS.some((p) => location.pathname === p)
   );
 
   useEffect(() => {
+    if (isViewer) {
+      setReportsMenuOpen(true);
+      return;
+    }
     if (REPORT_PATHS.some((p) => location.pathname === p)) setReportsMenuOpen(true);
     if (ADMIN_REPORT_PATHS.some((p) => location.pathname === p)) setScrappingReportsMenuOpen(true);
-  }, [location.pathname]);
+  }, [location.pathname, isViewer]);
 
   const handleNavClick = () => {
     if (!isDesktop && onCloseMobile) onCloseMobile();
@@ -96,18 +103,20 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
             <div className="nav-menu-item">
               <button
                 type="button"
-                onClick={() => setReportsMenuOpen(!reportsMenuOpen)}
+                onClick={() => {
+                  if (!isViewer) setReportsMenuOpen(!reportsMenuOpen);
+                }}
                 className="nav-link flex items-center justify-between w-full px-4 py-2 text-white/85 hover:bg-white/10 hover:text-white rounded-md"
                 id="reportsMenuToggle"
-                aria-expanded={reportsMenuOpen}
+                aria-expanded={isViewer ? true : reportsMenuOpen}
               >
                 <div className="flex items-center">
                   <i className="fas fa-chart-bar mr-3"></i>
                   <span className="nav-text">Reports</span>
                 </div>
-                <i className={`fas fa-chevron-down text-xs nav-chevron ${reportsMenuOpen ? 'rotate-180' : ''}`}></i>
+                {!isViewer && <i className={`fas fa-chevron-down text-xs nav-chevron ${reportsMenuOpen ? 'rotate-180' : ''}`}></i>}
               </button>
-              <ul className={`nav-submenu ${reportsMenuOpen ? 'show' : 'hidden'}`} id="reportsSubmenu">
+              <ul className={`nav-submenu ${isViewer || reportsMenuOpen ? 'show' : 'hidden'}`} id="reportsSubmenu">
                 <li>
                   <Link
                     to="/inventory-report"
@@ -157,7 +166,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
           </li>
 
           {/* 3. Scrapping Reports */}
-          <li>
+          {isAdmin && <li>
             <div className="nav-menu-item">
               <button
                 type="button"
@@ -208,18 +217,18 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
                 </li>
               </ul>
             </div>
-          </li>
+          </li>}
 
           {/* Section break: after Scrapping Reports */}
-          <li className="sidebar-nav-section-break sidebar-nav-section-label list-none" aria-hidden="true">
+          {isAdmin && <li className="sidebar-nav-section-break sidebar-nav-section-label list-none" aria-hidden="true">
             <div className="nav-section-divider mx-3 my-2 border-t border-white/25" />
             <div className="nav-section-title px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
               Management
             </div>
-          </li>
+          </li>}
 
           {/* Client Master & below */}
-          <li>
+          {isAdmin && <li>
             <Link
               to="/clients"
               onClick={handleNavClick}
@@ -231,8 +240,8 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
               <i className="fas fa-users mr-3 text-sky-300/90"></i>
               <span className="nav-text font-medium">Client Master</span>
             </Link>
-          </li>
-          <li>
+          </li>}
+          {isAdmin && <li>
             <Link
               to="/client-inventory-sources"
               onClick={handleNavClick}
@@ -244,8 +253,8 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
               <i className="fas fa-database mr-3 text-emerald-300/90"></i>
               <span className="nav-text">Inventory sources</span>
             </Link>
-          </li>
-          <li>
+          </li>}
+          {isAdmin && <li>
             <Link
               to="/sendgrid-event-stats"
               onClick={handleNavClick}
@@ -257,8 +266,8 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
               <i className="fas fa-envelope-open-text mr-3 text-violet-300/90"></i>
               <span className="nav-text">SendGrid event stats</span>
             </Link>
-          </li>
-          <li>
+          </li>}
+          {isAdmin && <li>
             <Link
               to="/sendgrid-autoname-event-stats"
               onClick={handleNavClick}
@@ -270,10 +279,10 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
               <i className="fas fa-envelope mr-3 text-fuchsia-300/90"></i>
               <span className="nav-text">SendGrid autoname stats</span>
             </Link>
-          </li>
+          </li>}
 
           {/* User Profile, User Management, Roles, Inventory */}
-          {bottomNavItems.map((item) => (
+          {isAdmin && bottomNavItems.map((item) => (
             <li key={item.path}>
               <Link
                 to={item.path}
@@ -288,7 +297,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
               </Link>
             </li>
           ))}
-          <li>
+          {isAdmin && <li>
             <Link
               to="/login-history"
               onClick={handleNavClick}
@@ -300,7 +309,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onCloseMobile, isDesktop }) 
               <i className="fas fa-history mr-3"></i>
               <span className="nav-text">Login History</span>
             </Link>
-          </li>
+          </li>}
         </ul>
       </nav>
     </div>

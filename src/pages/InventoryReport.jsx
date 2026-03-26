@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { withTimeout } from '../lib/requestWithTimeout';
+import { useAuth } from '../contexts/AuthContext';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
@@ -23,6 +24,13 @@ function escapeCsvCell(val) {
 }
 
 const InventoryReport = () => {
+  const { currentUser } = useAuth();
+  const isAdmin = (currentUser?.role || '').toLowerCase() === 'admin';
+  const isRestrictedByAssignment = !isAdmin;
+  const assignedClientIds = useMemo(
+    () => (Array.isArray(currentUser?.assignedClientIds) ? currentUser.assignedClientIds.map(Number).filter(Number.isFinite) : []),
+    [currentUser?.assignedClientIds]
+  );
   const [clients, setClients] = useState([]);
   const [clientsError, setClientsError] = useState(null);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -46,11 +54,14 @@ const InventoryReport = () => {
     setClientsError(null);
     try {
       const { data, error } = await withTimeout(
-        supabase
-          .from('clients')
-          .select('id, full_name')
-          .eq('is_active', true)
-          .order('full_name'),
+        (() => {
+          let q = supabase.from('clients').select('id, full_name').eq('is_active', true);
+          if (isRestrictedByAssignment) {
+            if (assignedClientIds.length === 0) return q.limit(0);
+            q = q.in('id', assignedClientIds);
+          }
+          return q.order('full_name');
+        })(),
         CLIENTS_LOAD_TIMEOUT_MS,
         'Loading clients timed out. Click Retry or refresh the page.'
       );
@@ -72,6 +83,14 @@ const InventoryReport = () => {
     setMessage({ type: '', text: '' });
     try {
       let q = supabase.from('inventorydata').select('*');
+      if (isRestrictedByAssignment) {
+        if (assignedClientIds.length === 0) {
+          setRawRows([]);
+          setLoading(false);
+          return;
+        }
+        q = q.in('customer_id', assignedClientIds);
+      }
       if (selectedClientId) q = q.eq('customer_id', Number(selectedClientId));
       if (reportDate) q = q.eq('pull_date', reportDate);
       const { data, error } = await withTimeout(
@@ -91,7 +110,7 @@ const InventoryReport = () => {
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [currentUser?.id, isRestrictedByAssignment, assignedClientIds.join(',')]);
 
   useEffect(() => {
     loadInventoryData();

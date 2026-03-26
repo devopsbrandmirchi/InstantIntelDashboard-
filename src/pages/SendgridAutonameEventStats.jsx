@@ -62,6 +62,7 @@ const SendgridAutonameEventStats = () => {
     let clickCount = 0;
     let otherCount = 0;
     const nameSet = new Set();
+    const emailSet = new Set();
     rows.forEach((r) => {
       const ev = (r.event || '').toLowerCase();
       if (ev === 'open') openCount += 1;
@@ -70,6 +71,8 @@ const SendgridAutonameEventStats = () => {
 
       const mcName = (r.mc_auto_name || '').trim();
       if (mcName) nameSet.add(mcName);
+      const email = (r.email || '').trim().toLowerCase();
+      if (email) emailSet.add(email);
     });
     return {
       total: rows.length,
@@ -77,6 +80,7 @@ const SendgridAutonameEventStats = () => {
       clickCount,
       otherCount,
       distinctMcAutoName: nameSet.size,
+      distinctEmailCount: emailSet.size,
     };
   }, [rows]);
 
@@ -183,7 +187,7 @@ const SendgridAutonameEventStats = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-5">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total events</p>
           <p className="text-2xl font-semibold text-slate-800 tabular-nums mt-1">{stats.total.toLocaleString()}</p>
@@ -200,6 +204,11 @@ const SendgridAutonameEventStats = () => {
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Distinct mc_auto_name</p>
           <p className="text-2xl font-semibold text-slate-800 tabular-nums mt-1">{stats.distinctMcAutoName.toLocaleString()}</p>
           <p className="text-[11px] text-slate-500 mt-1">Unique campaign names in this view</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Distinct emails</p>
+          <p className="text-2xl font-semibold text-slate-800 tabular-nums mt-1">{stats.distinctEmailCount.toLocaleString()}</p>
+          <p className="text-[11px] text-slate-500 mt-1">Unique recipient emails in this view</p>
         </div>
       </div>
 

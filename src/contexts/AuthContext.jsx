@@ -26,6 +26,26 @@ function mapSupabaseUser(supabaseUser, session) {
   };
 }
 
+function normalizeClientIds(raw) {
+  if (raw == null) return [];
+  let arr = [];
+  if (Array.isArray(raw)) arr = raw;
+  else if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch {
+      arr = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+  } else if (typeof raw === 'object') {
+    if (Array.isArray(raw.ids)) arr = raw.ids;
+  }
+  return [...new Set(arr.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0))];
+}
+
 const ROLE_FETCH_TIMEOUT_MS = 25000;
 const SESSION_LOAD_TIMEOUT_MS = 25000;
 
@@ -76,6 +96,20 @@ async function fetchUserRoleFromDb(userId, retries = 2) {
   return null;
 }
 
+async function fetchAssignedClientIds(userId) {
+  try {
+    const { data, error } = await withTimeout(
+      supabase.from('profiles').select('clients').eq('id', userId).single(),
+      10000,
+      'Assigned clients fetch timeout'
+    );
+    if (error) return [];
+    return normalizeClientIds(data?.clients);
+  } catch {
+    return [];
+  }
+}
+
 const CONNECTION_ERROR_MESSAGE = 'Unable to connect. Please check your network and refresh.';
 
 export const AuthProvider = ({ children }) => {
@@ -86,15 +120,22 @@ export const AuthProvider = ({ children }) => {
   const setUserWithRole = async (supabaseUser, session) => {
     const baseUser = mapSupabaseUser(supabaseUser, session);
     let roleFromDb = null;
+    let assignedClientIds = [];
     try {
       roleFromDb = await fetchUserRoleFromDb(supabaseUser.id);
     } catch (err) {
       console.warn('Role fetch failed or timed out, using fallback:', err?.message);
     }
+    try {
+      assignedClientIds = await fetchAssignedClientIds(supabaseUser.id);
+    } catch (err) {
+      console.warn('Assigned clients fetch failed, using empty list:', err?.message);
+    }
     const role = (roleFromDb || baseUser.role || '').toLowerCase() || 'viewer';
     setCurrentUser({
       ...baseUser,
-      role
+      role,
+      assignedClientIds
     });
   };
 

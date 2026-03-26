@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -34,6 +35,13 @@ const CHART_COLORS = [
 ];
 
 const Dashboard = () => {
+  const { currentUser } = useAuth();
+  const isAdmin = (currentUser?.role || '').toLowerCase() === 'admin';
+  const isRestrictedByAssignment = !isAdmin;
+  const assignedClientIds = useMemo(
+    () => (Array.isArray(currentUser?.assignedClientIds) ? currentUser.assignedClientIds.map(Number).filter(Number.isFinite) : []),
+    [currentUser?.assignedClientIds]
+  );
   const [stats, setStats] = useState({
     totalClients: 0,
     activeClients: 0,
@@ -58,32 +66,44 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [currentUser?.id, isRestrictedByAssignment, assignedClientIds.join(',')]);
 
   useEffect(() => {
     loadChartData();
-  }, []);
+  }, [currentUser?.id, isRestrictedByAssignment, assignedClientIds.join(',')]);
 
   useEffect(() => {
     loadSalesChartData();
-  }, []);
+  }, [currentUser?.id, isRestrictedByAssignment, assignedClientIds.join(',')]);
 
   useEffect(() => {
     loadSalesByCustomerChartData();
-  }, []);
+  }, [currentUser?.id, isRestrictedByAssignment, assignedClientIds.join(',')]);
 
   const loadChartData = async () => {
     setChartError(null);
     try {
+      if (isRestrictedByAssignment && assignedClientIds.length === 0) {
+        setDailyInventoryData([]);
+        setClientsMap({});
+        return;
+      }
       const [dailyRes, clientsRes] = await Promise.all([
         supabase.rpc('get_daily_inventory_by_customer'),
-        supabase.from('clients').select('id, full_name')
+        (() => {
+          let q = supabase.from('clients').select('id, full_name');
+          if (isRestrictedByAssignment) q = q.in('id', assignedClientIds);
+          return q;
+        })()
       ]);
       if (clientsRes.data) {
         setClientsMap(Object.fromEntries((clientsRes.data || []).map((c) => [c.id, c.full_name || `Client #${c.id}`])));
       }
       if (dailyRes.error) throw dailyRes.error;
-      setDailyInventoryData(dailyRes.data || []);
+      const rows = dailyRes.data || [];
+      setDailyInventoryData(
+        isRestrictedByAssignment ? rows.filter((r) => assignedClientIds.includes(Number(r.customer_id))) : rows
+      );
     } catch (err) {
       console.error('Error loading chart data:', err);
       setChartError(err?.message || 'Failed to load chart data.');
@@ -94,9 +114,34 @@ const Dashboard = () => {
   const loadSalesChartData = async () => {
     setSalesChartError(null);
     try {
-      const { data, error } = await supabase.rpc('get_daily_sales_current_month');
+      if (!isRestrictedByAssignment) {
+        const { data, error } = await supabase.rpc('get_daily_sales_current_month');
+        if (error) throw error;
+        setDailySalesData(data || []);
+        return;
+      }
+      if (assignedClientIds.length === 0) {
+        setDailySalesData([]);
+        return;
+      }
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('saleprocessedvins')
+        .select('final_sold_date, customer_id')
+        .in('customer_id', assignedClientIds)
+        .gte('final_sold_date', monthStart)
+        .lt('final_sold_date', nextMonthStart);
       if (error) throw error;
-      setDailySalesData(data || []);
+      const byDay = {};
+      (data || []).forEach((r) => {
+        const day = String(r.final_sold_date || '').slice(0, 10);
+        if (!day) return;
+        byDay[day] = (byDay[day] || 0) + 1;
+      });
+      const mapped = Object.entries(byDay).map(([day, cnt]) => ({ day, cnt, total_value: 0 }));
+      setDailySalesData(mapped);
     } catch (err) {
       console.error('Error loading sales chart data:', err);
       setSalesChartError(err?.message || 'Failed to load sales chart data.');
@@ -107,9 +152,16 @@ const Dashboard = () => {
   const loadSalesByCustomerChartData = async () => {
     setSalesByCustomerChartError(null);
     try {
+      if (isRestrictedByAssignment && assignedClientIds.length === 0) {
+        setDailySalesByCustomerData([]);
+        return;
+      }
       const { data, error } = await supabase.rpc('get_daily_sales_by_customer');
       if (error) throw error;
-      setDailySalesByCustomerData(data || []);
+      const rows = data || [];
+      setDailySalesByCustomerData(
+        isRestrictedByAssignment ? rows.filter((r) => assignedClientIds.includes(Number(r.customer_id))) : rows
+      );
     } catch (err) {
       console.error('Error loading sales-by-customer chart data:', err);
       setSalesByCustomerChartError(err?.message || 'Failed to load sales by customer data.');
@@ -121,6 +173,43 @@ const Dashboard = () => {
     setError(null);
     setDashboardLoading(true);
     try {
+      if (isRestrictedByAssignment && assignedClientIds.length === 0) {
+        setStats({
+          totalClients: 0,
+          activeClients: 0,
+          totalInventory: 0,
+          customersWithInventory: 0,
+          totalProcessedSales: 0,
+          customersInProcessedSales: 0,
+          totalRoles: 0,
+          activeUsers: 0
+        });
+        return;
+      }
+      if (isRestrictedByAssignment) {
+        const [clientsRes, activeClientsRes, inventoryRes, inventoryCustomersRes, processedRes] = await Promise.all([
+          supabase.from('clients').select('*', { count: 'exact', head: true }).in('id', assignedClientIds),
+          supabase.from('clients').select('*', { count: 'exact', head: true }).eq('is_active', true).in('id', assignedClientIds),
+          supabase.from('inventorydata').select('*', { count: 'exact', head: true }).in('customer_id', assignedClientIds),
+          supabase.from('inventorydata').select('customer_id').in('customer_id', assignedClientIds),
+          supabase.from('saleprocessedvins').select('customer_id', { count: 'exact' }).in('customer_id', assignedClientIds)
+        ]);
+        const inventoryRows = inventoryCustomersRes.data || [];
+        const inventoryCustomers = new Set(inventoryRows.map((r) => Number(r.customer_id)).filter(Number.isFinite));
+        const processedRows = processedRes.data || [];
+        const processedCustomers = new Set(processedRows.map((r) => Number(r.customer_id)).filter(Number.isFinite));
+        setStats({
+          totalClients: clientsRes.count ?? 0,
+          activeClients: activeClientsRes.count ?? 0,
+          totalInventory: inventoryRes.count ?? 0,
+          customersWithInventory: inventoryCustomers.size,
+          totalProcessedSales: processedRes.count ?? 0,
+          customersInProcessedSales: processedCustomers.size,
+          totalRoles: 0,
+          activeUsers: 0
+        });
+        return;
+      }
       const [clientsRes, activeClientsRes, inventoryRes, customersWithInvRes, processedSummaryRes, rolesRes, profilesRes] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact', head: true }),
         supabase.from('clients').select('*', { count: 'exact', head: true }).eq('is_active', true),

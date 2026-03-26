@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const TAB_LIST = 'list';
 const TAB_GRID = 'grid';
@@ -11,6 +12,13 @@ function escapeCsvCell(val) {
 }
 
 const DailySalesCount = () => {
+  const { currentUser } = useAuth();
+  const isAdmin = (currentUser?.role || '').toLowerCase() === 'admin';
+  const isRestrictedByAssignment = !isAdmin;
+  const assignedClientIds = useMemo(
+    () => (Array.isArray(currentUser?.assignedClientIds) ? currentUser.assignedClientIds.map(Number).filter(Number.isFinite) : []),
+    [currentUser?.assignedClientIds]
+  );
   const [counts, setCounts] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,9 +33,21 @@ const DailySalesCount = () => {
     setLoading(true);
     setError(null);
     try {
+      let countQ = supabase.from('sales_daily_count').select('id, customer_id, sold_date, sale_count');
+      let clientsQ = supabase.from('clients').select('id, full_name').eq('is_active', true);
+      if (isRestrictedByAssignment) {
+        if (assignedClientIds.length === 0) {
+          setCounts([]);
+          setClients([]);
+          setLoading(false);
+          return;
+        }
+        countQ = countQ.in('customer_id', assignedClientIds);
+        clientsQ = clientsQ.in('id', assignedClientIds);
+      }
       const [countRes, clientsRes] = await Promise.all([
-        supabase.from('sales_daily_count').select('id, customer_id, sold_date, sale_count').order('sold_date', { ascending: false }),
-        supabase.from('clients').select('id, full_name').eq('is_active', true).order('full_name'),
+        countQ.order('sold_date', { ascending: false }),
+        clientsQ.order('full_name'),
       ]);
       if (countRes.error) throw countRes.error;
       if (clientsRes.error) throw clientsRes.error;
@@ -45,7 +65,7 @@ const DailySalesCount = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentUser?.id, isRestrictedByAssignment, assignedClientIds.join(',')]);
 
   const clientsMap = useMemo(() => Object.fromEntries((clients || []).map((c) => [c.id, c.full_name || `Client #${c.id}`])), [clients]);
 
