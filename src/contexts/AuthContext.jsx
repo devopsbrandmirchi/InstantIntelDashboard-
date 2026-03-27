@@ -131,7 +131,13 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.warn('Assigned clients fetch failed, using empty list:', err?.message);
     }
-    const role = (roleFromDb || baseUser.role || '').toLowerCase() || 'viewer';
+    // Keep previous role for the same user if role lookup temporarily fails
+    // (prevents accidental demotion/redirect loops on transient DB/network timeouts).
+    const previousRoleForSameUser =
+      currentUser?.id === supabaseUser.id && currentUser?.role
+        ? String(currentUser.role).toLowerCase()
+        : null;
+    const role = (roleFromDb || previousRoleForSameUser || baseUser.role || '').toLowerCase() || 'viewer';
     setCurrentUser({
       ...baseUser,
       role,

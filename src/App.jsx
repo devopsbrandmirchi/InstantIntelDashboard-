@@ -22,6 +22,8 @@ import AppLoadingScreen from './components/AppLoadingScreen';
 import SendgridEventStats from './pages/SendgridEventStats';
 import SendgridAutonameEventStats from './pages/SendgridAutonameEventStats';
 import LoginHistory from './pages/LoginHistory';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
+import AdminAccessDenied from './pages/AdminAccessDenied';
 
 const PrivateRoute = ({ children }) => {
   const { currentUser, loading } = useAuth();
@@ -42,7 +44,7 @@ const RoleRoute = ({ children, allowViewer = false }) => {
   if (role === 'admin') return children;
   if (role === 'viewer' && allowViewer) return children;
 
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to="/access-denied-admin" replace />;
 };
 
 const GuestRoute = ({ children }) => {
@@ -63,7 +65,7 @@ const AdminRoute = ({ children }) => {
   }
 
   if (!currentUser) return <Navigate to="/login" replace />;
-  if ((currentUser.role || '').toLowerCase() !== 'admin') return <Navigate to="/dashboard" replace />;
+  if ((currentUser.role || '').toLowerCase() !== 'admin') return <Navigate to="/access-denied-admin" replace />;
   return children;
 };
 
@@ -92,11 +94,21 @@ function App() {
             }
           />
           <Route
+            path="/access-denied-admin"
+            element={
+              <PrivateRoute>
+                <AdminAccessDenied />
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/dashboard"
             element={
               <RoleRoute allowViewer>
                 <Layout>
-                  <Dashboard />
+                  <RouteErrorBoundary>
+                    <Dashboard />
+                  </RouteErrorBoundary>
                 </Layout>
               </RoleRoute>
             }
