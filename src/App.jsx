@@ -42,7 +42,7 @@ const RoleRoute = ({ children, allowViewer = false }) => {
 
   const role = (currentUser.role || 'viewer').toLowerCase();
   if (role === 'admin') return children;
-  if (role === 'viewer' && allowViewer) return children;
+  if (allowViewer) return children;
 
   return <Navigate to="/access-denied-admin" replace />;
 };
