@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 const NormalizedInventoryScrapStats = () => {
@@ -11,34 +11,35 @@ const NormalizedInventoryScrapStats = () => {
   const [search, setSearch] = useState('');
   const [metric, setMetric] = useState('rows');
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error: rpcErr } = await supabase.rpc('get_normalized_inventory_scrap_stats_7d');
-        if (rpcErr) throw rpcErr;
-        if (data && typeof data === 'object' && !Array.isArray(data) && data.dates && data.stats) {
-          setDateColumns(Array.isArray(data.dates) ? data.dates.map(String) : []);
-          setRows(Array.isArray(data.stats) ? data.stats : []);
-          setRangeStart(String(data.range_start || ''));
-          setRangeEnd(String(data.range_end || ''));
-        } else {
-          setError('Unexpected response. Apply migration 20260317000012_normalized_inventory_scrap_stats_7d.sql.');
-          setRows([]);
-          setDateColumns([]);
-        }
-      } catch (e) {
-        console.error(e);
-        setError(e?.message || 'Failed to load statistics.');
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('get_normalized_inventory_scrap_stats_7d');
+      if (rpcErr) throw rpcErr;
+      if (data && typeof data === 'object' && !Array.isArray(data) && data.dates && data.stats) {
+        setDateColumns(Array.isArray(data.dates) ? data.dates.map(String) : []);
+        setRows(Array.isArray(data.stats) ? data.stats : []);
+        setRangeStart(String(data.range_start || ''));
+        setRangeEnd(String(data.range_end || ''));
+      } else {
+        setError('Unexpected response. Apply migration 20260317000012_normalized_inventory_scrap_stats_7d.sql.');
         setRows([]);
         setDateColumns([]);
-      } finally {
-        setLoading(false);
       }
-    };
-    load();
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || 'Failed to load statistics.');
+      setRows([]);
+      setDateColumns([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const customers = useMemo(() => {
     const map = new Map();
@@ -164,6 +165,15 @@ const NormalizedInventoryScrapStats = () => {
             />
             <i className="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden />
           </div>
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            className="ml-auto px-3 py-2 text-sm rounded-md bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-sync-alt'}`} aria-hidden />
+            Refresh
+          </button>
         </div>
 
         {loading ? (

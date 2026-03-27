@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 const ScrapRawdataStats = () => {
@@ -12,48 +12,49 @@ const ScrapRawdataStats = () => {
   const [search, setSearch] = useState('');
   const [metric, setMetric] = useState('rows'); // 'rows' | 'vins'
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [statsRes, clientsRes] = await Promise.all([
-          supabase.rpc('get_scrap_rawdata_stats_7d'),
-          supabase.from('clients').select('id, full_name, dealership_name').eq('is_active', true)
-        ]);
-        if (statsRes.error) throw statsRes.error;
-        if (clientsRes.error) throw clientsRes.error;
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [statsRes, clientsRes] = await Promise.all([
+        supabase.rpc('get_scrap_rawdata_stats_7d'),
+        supabase.from('clients').select('id, full_name, dealership_name').eq('is_active', true)
+      ]);
+      if (statsRes.error) throw statsRes.error;
+      if (clientsRes.error) throw clientsRes.error;
 
-        const payload = statsRes.data;
-        if (payload && typeof payload === 'object' && !Array.isArray(payload) && payload.dates && payload.stats) {
-          const dates = Array.isArray(payload.dates) ? payload.dates.map(String) : [];
-          const stats = Array.isArray(payload.stats) ? payload.stats : [];
-          setDateColumns(dates);
-          setRows(stats);
-          setRangeStart(String(payload.range_start || ''));
-          setRangeEnd(String(payload.range_end || ''));
-        } else if (Array.isArray(payload)) {
-          setError(
-            'Database function is outdated. Apply migration 20260317000011_scrap_rawdata_stats_7d_json.sql so statistics use exactly 7 days including today (server date).'
-          );
-          setRows([]);
-          setDateColumns([]);
-        } else {
-          setRows([]);
-          setDateColumns([]);
-        }
-        setClients(clientsRes.data || []);
-      } catch (e) {
-        console.error(e);
-        setError(e?.message || 'Failed to load scrap statistics.');
+      const payload = statsRes.data;
+      if (payload && typeof payload === 'object' && !Array.isArray(payload) && payload.dates && payload.stats) {
+        const dates = Array.isArray(payload.dates) ? payload.dates.map(String) : [];
+        const stats = Array.isArray(payload.stats) ? payload.stats : [];
+        setDateColumns(dates);
+        setRows(stats);
+        setRangeStart(String(payload.range_start || ''));
+        setRangeEnd(String(payload.range_end || ''));
+      } else if (Array.isArray(payload)) {
+        setError(
+          'Database function is outdated. Apply migration 20260317000011_scrap_rawdata_stats_7d_json.sql so statistics use exactly 7 days including today (server date).'
+        );
         setRows([]);
         setDateColumns([]);
-      } finally {
-        setLoading(false);
+      } else {
+        setRows([]);
+        setDateColumns([]);
       }
-    };
-    load();
+      setClients(clientsRes.data || []);
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || 'Failed to load scrap statistics.');
+      setRows([]);
+      setDateColumns([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const nameByDealership = useMemo(() => {
     const m = {};
@@ -182,6 +183,15 @@ const ScrapRawdataStats = () => {
             />
             <i className="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden />
           </div>
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            className="ml-auto px-3 py-2 text-sm rounded-md bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-sync-alt'}`} aria-hidden />
+            Refresh
+          </button>
         </div>
 
         {loading ? (

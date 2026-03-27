@@ -61,6 +61,7 @@ const Dashboard = () => {
   const [salesChartError, setSalesChartError] = useState(null);
   const [salesByCustomerChartError, setSalesByCustomerChartError] = useState(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [inventoryLegendVisible, setInventoryLegendVisible] = useState([]);
   const [salesByCustomerLegendVisible, setSalesByCustomerLegendVisible] = useState([]);
 
@@ -169,9 +170,10 @@ const Dashboard = () => {
     }
   };
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (opts = {}) => {
+    const showFullPage = opts.showFullPage !== false;
     setError(null);
-    setDashboardLoading(true);
+    if (showFullPage) setDashboardLoading(true);
     try {
       if (isRestrictedByAssignment && assignedClientIds.length === 0) {
         setStats({
@@ -237,7 +239,21 @@ const Dashboard = () => {
       console.error('Error loading dashboard data:', err);
       setError(err?.message || 'Failed to load dashboard data.');
     } finally {
-      setDashboardLoading(false);
+      if (showFullPage) setDashboardLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadDashboardData({ showFullPage: false }),
+        loadChartData(),
+        loadSalesChartData(),
+        loadSalesByCustomerChartData()
+      ]);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -428,6 +444,17 @@ const Dashboard = () => {
 
   return (
     <div className="page-content text-xs">
+      <div className="flex justify-end mb-3">
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="px-3 py-2 text-sm rounded-md bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <i className={`fas ${refreshing ? 'fa-spinner fa-spin' : 'fa-sync-alt'}`} aria-hidden />
+          Refresh
+        </button>
+      </div>
       {error && (
         <div className="mb-3 p-2 rounded bg-red-50 text-red-700 text-xs">
           {error}
