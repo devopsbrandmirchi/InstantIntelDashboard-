@@ -101,9 +101,9 @@ const ScraperControl = () => {
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-800 tracking-tight">Run Scrapy spider</h2>
         <p className="text-sm text-slate-500 mt-1">
-          Starts a crawl on your DigitalOcean droplet in the background. Spiders write to Supabase; this app only
-          triggers the run and lists spider names (same as <code className="text-xs bg-slate-100 px-1 rounded">scrapy list</code>
-          ).
+          Starts <code className="text-xs bg-slate-100 px-1 rounded">scrapy crawl</code> on the droplet via the HTTP bridge
+          (not <code className="text-xs bg-slate-100 px-1 rounded">systemctl scrapy-spider@…</code>). Spiders write to Supabase.
+          Logs go under <code className="text-xs bg-slate-100 px-1 rounded">_bridge_crawl_logs/</code> on the server after you deploy the latest bridge.
         </p>
       </div>
 

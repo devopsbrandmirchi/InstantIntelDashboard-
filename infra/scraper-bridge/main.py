@@ -30,6 +30,7 @@ so subprocess scrapy runs see the same env as: python -m scrapy crawl Livingston
 import os
 import re
 import subprocess
+import time
 from typing import Dict, Optional
 
 from dotenv import load_dotenv
@@ -106,21 +107,36 @@ def start_crawl(body: CrawlBody, authorization: Optional[str] = Header(None)):
     if ll not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
         ll = "INFO"
     args = [PYTHON, "-m", "scrapy", "crawl", name, "-s", f"LOG_LEVEL={ll}"]
+    log_dir = os.path.join(PROJECT_DIR, "_bridge_crawl_logs")
+    os.makedirs(log_dir, mode=0o755, exist_ok=True)
+    log_path = os.path.join(log_dir, f"{name}-{int(time.time())}.log")
+    log_fd = os.open(log_path, os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o644)
     try:
         proc = subprocess.Popen(
             args,
             cwd=PROJECT_DIR,
             env=_subprocess_env(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_fd,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
+            close_fds=True,
         )
     except Exception as e:
+        os.close(log_fd)
         raise HTTPException(status_code=500, detail=str(e)[:2000])
+    os.close(log_fd)
+
+    rel_log = os.path.join("_bridge_crawl_logs", os.path.basename(log_path))
     return {
         "ok": True,
         "spider": name,
         "pid": proc.pid,
         "logLevel": ll,
-        "message": "Spider started in background on the droplet (same env as manual scrapy crawl).",
+        "logFile": log_path,
+        "logFileRelative": rel_log,
+        "message": (
+            "Spider started in background. stdout/stderr → "
+            f"{rel_log} (tail -f on the droplet). "
+            "This does not use systemd scrapy-spider@… timers."
+        ),
     }
