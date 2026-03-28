@@ -11,6 +11,7 @@ const ScrapRawdataStats = () => {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [metric, setMetric] = useState('rows'); // 'rows' | 'vins'
+  const [activeTab, setActiveTab] = useState('stats'); // 'stats' | 'missing'
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -18,7 +19,7 @@ const ScrapRawdataStats = () => {
     try {
       const [statsRes, clientsRes] = await Promise.all([
         supabase.rpc('get_scrap_rawdata_stats_7d'),
-        supabase.from('clients').select('id, full_name, dealership_name').eq('is_active', true)
+        supabase.from('clients').select('id, full_name, dealership_name, scrap_feed').eq('is_active', true)
       ]);
       if (statsRes.error) throw statsRes.error;
       if (clientsRes.error) throw clientsRes.error;
@@ -108,6 +109,33 @@ const ScrapRawdataStats = () => {
 
   const todayStr = rangeEnd;
 
+  const hasScrapeTodayForDealership = useCallback(
+    (dealershipNameTrimmed) => {
+      if (!todayStr || !dealershipNameTrimmed) return false;
+      const v = lookup[`${dealershipNameTrimmed}\t${todayStr}`];
+      if (!v) return false;
+      return (Number(v.rows) || 0) > 0 || (Number(v.vins) || 0) > 0;
+    },
+    [lookup, todayStr]
+  );
+
+  const scrapFeedMissingToday = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = (clients || []).filter((c) => c.scrap_feed);
+    const missing = list.filter((c) => {
+      const dn = (c.dealership_name || '').trim();
+      if (!dn) return true;
+      return !hasScrapeTodayForDealership(dn);
+    });
+    return missing
+      .filter((c) => {
+        if (!q) return true;
+        const blob = `${c.id} ${c.full_name || ''} ${c.dealership_name || ''}`.toLowerCase();
+        return blob.includes(q);
+      })
+      .sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || ''), undefined, { sensitivity: 'base' }));
+  }, [clients, hasScrapeTodayForDealership, search]);
+
   return (
     <div className="max-w-[100rem] mx-auto">
       <div className="mb-5">
@@ -149,6 +177,42 @@ const ScrapRawdataStats = () => {
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Dealerships (after filter)</p>
           <p className="text-2xl font-semibold text-slate-800 tabular-nums mt-1">{totals.dealershipCount}</p>
         </div>
+        <div className="bg-amber-50/80 rounded-xl border border-amber-200/80 shadow-sm p-4 sm:col-span-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-amber-900/80">Scrap feed ON — no rows today</p>
+          <p className="text-2xl font-semibold text-amber-950 tabular-nums mt-1">{scrapFeedMissingToday.length}</p>
+          <p className="text-[11px] text-amber-900/60 mt-1">
+            Active clients with <code className="text-[10px] bg-amber-100/80 px-1 rounded">scrap_feed</code> and no scrap stats for{' '}
+            {todayStr || 'today'} (includes missing <code className="text-[10px] bg-amber-100/80 px-1 rounded">dealership_name</code>).
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('stats')}
+          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+            activeTab === 'stats'
+              ? 'bg-slate-700 text-white border-slate-700'
+              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          7-day statistics
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('missing')}
+          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+            activeTab === 'missing'
+              ? 'bg-amber-800 text-white border-amber-800'
+              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          Missing scrape today
+          {scrapFeedMissingToday.length > 0 && (
+            <span className="ml-2 tabular-nums opacity-90">({scrapFeedMissingToday.length})</span>
+          )}
+        </button>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -157,8 +221,13 @@ const ScrapRawdataStats = () => {
             <button
               type="button"
               onClick={() => setMetric('rows')}
+              disabled={activeTab !== 'stats'}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                metric === 'rows' ? 'bg-slate-700 text-white' : 'text-slate-600 hover:bg-slate-100'
+                activeTab !== 'stats'
+                  ? 'text-slate-400 cursor-not-allowed'
+                  : metric === 'rows'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
               Row counts
@@ -166,8 +235,13 @@ const ScrapRawdataStats = () => {
             <button
               type="button"
               onClick={() => setMetric('vins')}
+              disabled={activeTab !== 'stats'}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                metric === 'vins' ? 'bg-slate-700 text-white' : 'text-slate-600 hover:bg-slate-100'
+                activeTab !== 'stats'
+                  ? 'text-slate-400 cursor-not-allowed'
+                  : metric === 'vins'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
               Distinct VINs
@@ -178,7 +252,7 @@ const ScrapRawdataStats = () => {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter by dealership or client name…"
+              placeholder={activeTab === 'stats' ? 'Filter by dealership or client name…' : 'Filter missing list…'}
               className="w-full rounded-lg border border-slate-300 pl-3 pr-9 py-2 text-sm"
             />
             <i className="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden />
@@ -199,6 +273,46 @@ const ScrapRawdataStats = () => {
             <i className="fas fa-spinner fa-spin text-2xl mb-2" />
             <p className="text-sm">Loading statistics…</p>
           </div>
+        ) : activeTab === 'missing' ? (
+          !todayStr ? (
+            <div className="py-16 text-center text-slate-500 text-sm">No “today” date from server yet. Refresh after stats load.</div>
+          ) : scrapFeedMissingToday.length === 0 ? (
+            <div className="py-16 text-center text-slate-500 text-sm px-4">
+              All active clients with scrap feed enabled have at least one row or distinct VIN for{' '}
+              <span className="font-medium text-slate-700">{todayStr}</span>, or none are flagged for scrap.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-amber-900/90 text-white">
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Client ID</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Client name</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Dealership name</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Why listed</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {scrapFeedMissingToday.map((c) => {
+                    const dn = (c.dealership_name || '').trim();
+                    const reason = !dn
+                      ? 'No dealership name — cannot match scrap_rawdata.dealership_name'
+                      : !lookup[`${dn}\t${todayStr}`]
+                        ? `No scrap rows for ${todayStr} (creation_date window)`
+                        : 'Zero rows and zero distinct VINs for today';
+                    return (
+                      <tr key={c.id} className="hover:bg-amber-50/40">
+                        <td className="px-4 py-2.5 tabular-nums text-slate-700">{c.id}</td>
+                        <td className="px-4 py-2.5 text-slate-900 font-medium">{c.full_name || '—'}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{dn || '—'}</td>
+                        <td className="px-4 py-2.5 text-slate-600 text-xs max-w-md">{reason}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : dateColumns.length === 0 && !error ? (
           <div className="py-16 text-center text-slate-500 text-sm">No date range from server. Apply the latest migration.</div>
         ) : dealerships.length === 0 ? (
