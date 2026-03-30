@@ -396,7 +396,25 @@ const Clients = () => {
   return (
     <div className="bg-white rounded shadow-md p-4 text-xs">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-3">
-        <h2 className="text-base font-bold text-gray-800">Client Master</h2>
+        <div>
+          <h2 className="text-base font-bold text-gray-800">Client Master</h2>
+          {!loading && (
+            <p className="text-xs text-gray-500 mt-1">
+              Displaying{' '}
+              <span className="font-semibold text-gray-700 tabular-nums">{sortedClients.length}</span>
+              {clients.length > 0 && sortedClients.length !== clients.length ? (
+                <>
+                  {' '}
+                  of <span className="font-semibold text-gray-700 tabular-nums">{clients.length}</span>
+                </>
+              ) : null}{' '}
+              {sortedClients.length === 1 ? 'client' : 'clients'}
+              {searchLower || activeFilter !== 'all' ? (
+                <span className="text-gray-400"> (search / status filter applied)</span>
+              ) : null}
+            </p>
+          )}
+        </div>
         <div className="flex flex-col xs:flex-row gap-2 sm:gap-3 sm:items-center">
           <div className="relative flex-1 sm:w-56">
             <i className="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />

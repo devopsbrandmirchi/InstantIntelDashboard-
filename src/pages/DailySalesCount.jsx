@@ -11,6 +11,26 @@ function escapeCsvCell(val) {
   return s;
 }
 
+/** Local YYYY-MM-DD for daily-sales columns (matches DB date keys). */
+function formatLocalYmd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function last30LocalDates() {
+  const arr = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    arr.push(formatLocalYmd(d));
+  }
+  return arr;
+}
+
 const DailySalesCount = () => {
   const { currentUser } = useAuth();
   const isAdmin = (currentUser?.role || '').toLowerCase() === 'admin';
@@ -104,8 +124,9 @@ const DailySalesCount = () => {
     }, {});
     const clientCount = Object.keys(byClient).length;
     const recordCount = filtered.length;
-    return { total, clientCount, recordCount };
-  }, [filtered]);
+    const activeClientsInScope = (clients || []).length;
+    return { total, clientCount, recordCount, activeClientsInScope };
+  }, [filtered, clients]);
 
   // Grid view: pivot (client rows × date columns)
   const gridLookup = useMemo(() => {
@@ -116,18 +137,15 @@ const DailySalesCount = () => {
     });
     return map;
   }, [counts]);
-  const gridDates = useMemo(() => {
-    const set = new Set((counts || []).map((r) => r.sold_date).filter(Boolean));
-    return Array.from(set).sort((a, b) => (b > a ? 1 : -1));
-  }, [counts]);
+  /** Always show the rolling last 30 local days so every active client has a row (— where no sales). */
+  const gridDates = useMemo(() => last30LocalDates(), [loading]);
   const gridClients = useMemo(() => {
-    const ids = [...new Set((counts || []).map((r) => r.customer_id).filter((v) => v != null))];
     const q = (gridSearch || '').trim().toLowerCase();
-    return ids
-      .map((id) => ({ id, name: clientsMap[id] ?? `Client #${id}` }))
+    return (clients || [])
+      .map((c) => ({ id: c.id, name: c.full_name || `Client #${c.id}` }))
       .filter(({ name }) => !q || name.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [counts, clientsMap, gridSearch]);
+  }, [clients, gridSearch]);
   const getGridCount = (customerId, soldDate) => gridLookup[`${customerId}\t${soldDate}`] ?? null;
 
   const handleSort = (field) => {
@@ -176,7 +194,18 @@ const DailySalesCount = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80">
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Active clients</p>
+          </div>
+          <div className="px-4 py-4">
+            <p className="text-2xl font-semibold text-slate-800 tabular-nums">{summary.activeClientsInScope}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {isRestrictedByAssignment ? 'Assigned to you (active)' : 'Active in Client Master'}
+            </p>
+          </div>
+        </div>
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80">
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total sales</p>
@@ -188,11 +217,11 @@ const DailySalesCount = () => {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Clients</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Clients w/ sales</p>
           </div>
           <div className="px-4 py-4">
             <p className="text-2xl font-semibold text-slate-800 tabular-nums">{summary.clientCount}</p>
-            <p className="text-xs text-slate-500 mt-1">With sales in window</p>
+            <p className="text-xs text-slate-500 mt-1">With sales in list filter</p>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -362,10 +391,14 @@ const DailySalesCount = () => {
               <i className="fas fa-spinner fa-spin text-2xl mb-3" aria-hidden="true" />
               <p className="text-sm font-medium">Loading…</p>
             </div>
-          ) : gridDates.length === 0 || gridClients.length === 0 ? (
-            <div className="py-16 text-center text-slate-500 text-sm">No grid data in the last 30 days.</div>
+          ) : gridClients.length === 0 ? (
+            <div className="py-16 text-center text-slate-500 text-sm">
+              {isRestrictedByAssignment
+                ? 'No assigned active clients, or none found.'
+                : 'No active clients found.'}
+            </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="max-h-[min(70vh,40rem)] overflow-auto overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-[#1e3a5f] text-white">
