@@ -269,7 +269,7 @@ const InventoryReport = () => {
   return (
     <div className="bg-white rounded-lg shadow-md p-4 text-xs">
       <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className={labelClass}>Client</label>
             <select
@@ -304,6 +304,23 @@ const InventoryReport = () => {
               onChange={(e) => setReportDate(e.target.value)}
               className={inputClass}
             />
+          </div>
+          <div>
+            <span className={`${labelClass} select-none opacity-0 pointer-events-none`} aria-hidden>
+              Refresh
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                void Promise.all([loadClients(), loadInventoryData()]);
+              }}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-3.5 h-7 rounded-lg bg-slate-700 text-white shadow-sm hover:bg-slate-600 active:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1"
+              aria-label="Refresh clients and inventory data"
+            >
+              <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`} aria-hidden />
+              Refresh
+            </button>
           </div>
         </div>
         <div className="text-gray-700 font-semibold text-xs">
