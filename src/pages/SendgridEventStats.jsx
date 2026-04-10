@@ -74,6 +74,7 @@ const SendgridEventStats = () => {
     let otherCount = 0;
     let mcAutoNameWithValue = 0;
     let mcAutoNameBlank = 0;
+    const uniqueMcAutoNames = new Set();
     filteredRows.forEach((r) => {
       const ev = (r.event || '').toLowerCase();
       if (ev === 'open') openCount += 1;
@@ -81,8 +82,10 @@ const SendgridEventStats = () => {
       else otherCount += 1;
 
       const mcName = (r.mc_auto_name || '').trim();
-      if (mcName) mcAutoNameWithValue += 1;
-      else mcAutoNameBlank += 1;
+      if (mcName) {
+        mcAutoNameWithValue += 1;
+        uniqueMcAutoNames.add(mcName);
+      } else mcAutoNameBlank += 1;
     });
     return {
       total: filteredRows.length,
@@ -91,6 +94,7 @@ const SendgridEventStats = () => {
       otherCount,
       mcAutoNameWithValue,
       mcAutoNameBlank,
+      uniqueMcAutoNameCount: uniqueMcAutoNames.size,
     };
   }, [filteredRows]);
 
@@ -221,7 +225,7 @@ const SendgridEventStats = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">mc_auto_name with value</p>
           <p className="text-2xl font-semibold text-slate-800 tabular-nums mt-1">
@@ -238,6 +242,15 @@ const SendgridEventStats = () => {
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
             {stats.total > 0 ? `${((stats.mcAutoNameBlank / stats.total) * 100).toFixed(1)}%` : '0.0%'} of filtered events
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Unique mc_auto_name</p>
+          <p className="text-2xl font-semibold text-slate-800 tabular-nums mt-1">
+            {stats.uniqueMcAutoNameCount.toLocaleString()}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Distinct non-empty values in the current filters (same rows as the table below, up to 5,000 loaded).
           </p>
         </div>
       </div>
